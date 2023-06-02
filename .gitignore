@@ -122,3 +122,6 @@ tmp
 
 # custom
 mmrotate/.mim
+
+toserver.sh
+/toserver.sh

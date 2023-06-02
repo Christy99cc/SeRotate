@@ -44,6 +44,8 @@ def build_dataset(cfg, default_args=None):
     elif isinstance(cfg.get('ann_file'), (list, tuple)):
         dataset = _concat_dataset(cfg, default_args)
     else:
+        print("cfg:", cfg)
+        print("default_args:", default_args)
         dataset = build_from_cfg(cfg, ROTATED_DATASETS, default_args)
 
     return dataset

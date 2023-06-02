@@ -45,6 +45,10 @@ def train_detector(model,
         **cfg.data.get('train_dataloader', {})
     }
 
+    # debug
+    print("===============DEBUG=================")
+    print("dataset:", dataset)
+
     data_loaders = [build_dataloader(ds, **train_loader_cfg) for ds in dataset]
 
     # put model on gpus
@@ -141,4 +145,10 @@ def train_detector(model,
         runner.resume(cfg.resume_from)
     elif cfg.load_from:
         runner.load_checkpoint(cfg.load_from)
+
+    # debug
+    print("===============DEBUG=================")
+    print("len(data_loaders):", len(data_loaders))
+    print("data_loaders:", data_loaders)
+    print("cfg.workflow:", cfg.workflow)
     runner.run(data_loaders, cfg.workflow)
