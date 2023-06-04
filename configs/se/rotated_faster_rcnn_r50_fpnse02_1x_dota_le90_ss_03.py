@@ -138,6 +138,6 @@ data = dict(
     test=dict(version=angle_version))
 
 optimizer = dict(lr=0.005)
-evaluation = dict(interval=12, metric='mAP')
+evaluation = dict(interval=1, metric='mAP')
 
 find_unused_parameters=True

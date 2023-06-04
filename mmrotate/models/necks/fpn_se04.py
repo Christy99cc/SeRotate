@@ -7,11 +7,11 @@ from ..builder import ROTATED_NECKS
 
 
 @ROTATED_NECKS.register_module()
-class FPNSE02(nn.Module):
+class FPNSE04(nn.Module):
     """
-    把FPNSE中卷积核大小由3, 7, 15改为 1, 3, 5
-    FPNSE loss降不下来考虑是卷积核尺寸太大 e.g. 15x15
+    等变卷积核大小 1, 3, 5
 
+    3-2-1：pooling + padding
     """
 
     def __init__(self,
@@ -28,7 +28,7 @@ class FPNSE02(nn.Module):
                  norm_cfg=None,
                  act_cfg=None,
                  upsample_cfg=dict(mode='nearest')):
-        super(FPNSE02, self).__init__()
+        super(FPNSE04, self).__init__()
         assert isinstance(in_channels, list)
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -200,28 +200,50 @@ class FPNSE_Conv(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=5, stride=1, padding=0, dilation=1):
         super().__init__()
         self.in_channels = in_channels
+        self.out_channels = out_channels
         self.stride = stride
         self.padding = padding
         self.dilation = dilation
         self.kernel_size = kernel_size
-        self.w1 = nn.Parameter(torch.randn(out_channels, in_channels, self.kernel_size, self.kernel_size),
-                               requires_grad=True)
-        self.w2 = None
-        self.w3 = None
+        self.w = nn.Parameter(torch.randn(3 * out_channels, in_channels, self.kernel_size, self.kernel_size),
+                              requires_grad=True)
+        # self.w1 = None
+        # self.w2 = None
+        # self.w3 = nn.Parameter(torch.randn(out_channels, in_channels, self.kernel_size, self.kernel_size),
+        #                        requires_grad=True)
 
     def forward(self, inputs):
+        w3 = self.w[-self.out_channels:, :, :, :]
+        # w2 center是对w3进行pooling
+        w2_center = F.max_pool2d(w3, kernel_size=(3, 3),
+                                 stride=1) / 3.0 * 5.0  # [256, 256, 3, 3]
+        # print("w2_center:", w2_center.shape)
+        w2 = self.w[self.out_channels:-self.out_channels, :, :, :]
+        w2_p1 = w2[:, :, :1, :]
+        w2_p2 = w2[:, :, -1:, :]
+        w2_p3 = w2[:, :, 1:-1, :1]
+        w2_p4 = w2[:, :, 1:-1, -1:]
 
-        w2_center_clip = self.w1[:, :, 1:-1, 1:-1]  # 3 x 3, [256, 256, 3, 3]
-        w3_center_clip = self.w1[:, :, 2:-2, 2:-2]  # 1 x 1, [256, 256, 1, 1]
-
-        # print("w2_center_clip.shape:", w2_center_clip.shape)
-        # print("w3_center_clip.shape:", w3_center_clip.shape)
-
-        size = [self.kernel_size, self.kernel_size]
-        self.w2 = F.interpolate(w2_center_clip, mode="nearest", size=size) / 2e3 # [256, 256, 5, 5]
-        self.w3 = F.interpolate(w3_center_clip, mode="nearest", size=size) / 2e5 # [256, 256, 5, 5]
+        w2_o1 = torch.cat([w2_p3, w2_center, w2_p4], dim=3)  # [256, 256, 3, 5]
+        # print("w2_o1.shape:", w2_o1.shape)
+        w2_o2 = torch.cat([w2_p1, w2_o1, w2_p2], dim=2)  # [256, 256, 5, 5]
+        # print("w2_o2.shape:", w2_o2.shape)
 
 
-        weight = torch.cat([self.w1, self.w2, self.w3], 0)  # [, , 15, 15]
-        outputs = F.conv2d(inputs, weight, stride=self.stride, padding=self.padding, dilation=self.dilation)
-        return outputs, weight
+        # w2 center是对w2进行pooling
+        w1_center = F.max_pool2d(w2_o2, kernel_size=(5, 5),
+                                 stride=1) * 3.0  # [256, 256, 1, 1]
+        # print("w1_center:", w1_center.shape)
+        w1 = self.w[:self.out_channels, :, :, :]
+        w1_p1 = w1[:, :, :2, :]
+        w1_p2 = w1[:, :, -2:, :]
+        w1_p3 = w1[:, :, 2:-2, :2]
+        w1_p4 = w1[:, :, 2:-2, -2:]
+        w1_o1 = torch.cat([w1_p3, w1_center, w1_p4], dim=3)  # [256, 256, 1, 5]
+        # print("w1_o1.shape:", w1_o1.shape)
+        w1_o2 = torch.cat([w1_p1, w1_o1, w1_p2], dim=2)  # [256, 256, 5, 5]
+        # print("w1_o2.shape:", w1_o2.shape)
+
+        w = torch.cat([w1, w2, w3], dim=0)
+        outputs = F.conv2d(inputs, w, stride=self.stride, padding=self.padding, dilation=self.dilation)
+        return outputs, self.w

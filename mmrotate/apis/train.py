@@ -148,7 +148,7 @@ def train_detector(model,
 
     # debug
     print("===============DEBUG=================")
-    print("len(data_loaders):", len(data_loaders))
+    # print("len(data_loaders):", len(data_loaders))
     print("data_loaders:", data_loaders)
     print("cfg.workflow:", cfg.workflow)
     runner.run(data_loaders, cfg.workflow)

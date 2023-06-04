@@ -139,4 +139,4 @@ data = dict(
 
 optimizer = dict(lr=0.005)
 evaluation = dict(interval=12, metric='mAP')
-work_dir = "./work_dirs/rotated_faster_rcnn_r50_fpn_1x_dota_le90_ms"
+work_dir = "./work_dirs/rotated_faster_rcnn_r50_fpn_1x_dota_le90_ss-trainval"

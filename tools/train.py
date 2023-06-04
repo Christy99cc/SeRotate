@@ -166,11 +166,11 @@ def main():
         test_cfg=cfg.get('test_cfg'))
     model.init_weights()
 
-    print("-------------here")
-    print("cfg.data.train:", cfg.data.train)
+    # print("-------------here")
+    # print("cfg.data.train:", cfg.data.train)
     datasets = [build_dataset(cfg.data.train)]
-    print("-------------here0000")
-    print("datasets:", datasets)
+    # print("-------------here0000")
+    # print("datasets:", datasets)
     if len(cfg.workflow) == 2:
         val_dataset = copy.deepcopy(cfg.data.val)
         val_dataset.pipeline = cfg.data.train.pipeline
@@ -184,8 +184,8 @@ def main():
     # add an attribute for visualization convenience
     model.CLASSES = datasets[0].CLASSES
     cfg.device = get_device()
-    print("-------------here1111")
-    print("datasets:", datasets)
+    # print("-------------here1111")
+    # print("datasets:", datasets)
     train_detector(
         model,
         datasets,
