@@ -17,7 +17,7 @@ model = dict(
         style='pytorch',
         init_cfg=dict(type='Pretrained', checkpoint='torchvision://resnet50')),
     neck=dict(
-        type='FPNSE04',
+        type='FPNSE31',
         in_channels=[256, 512, 1024, 2048],
         out_channels=256,
         num_outs=5),
@@ -141,7 +141,8 @@ data = dict(
 optimizer = dict(type='SGD', lr=0.005, momentum=0.9, weight_decay=0.0001)
 optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
 evaluation = dict(interval=12, metric='mAP')
+# resume_from='./work_dirs/rotated_faster_rcnn_r50_fpnse31_1x_dota_le90_ss/latest.pth'
 
 find_unused_parameters=True
 
-# CUDA_VISIBLE_DEVICES=0,1,2,3 ./tools/dist_train.sh configs/se/rotated_faster_rcnn_r50_fpnse04_1x_dota_le90_ss_01.py 4
+# CUDA_VISIBLE_DEVICES=4,5 ./tools/dist_train.sh configs/se/rotated_faster_rcnn_r50_fpnse31_1x_dota_le90_ss.py 2

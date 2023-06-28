@@ -7,11 +7,14 @@ from ..builder import ROTATED_NECKS
 
 
 @ROTATED_NECKS.register_module()
-class FPNSE04(nn.Module):
+class FPNSE08(nn.Module):
     """
     等变卷积核大小 1, 3, 5
 
     3-2-1：pooling + padding
+
+    3->2: 2x2, s = 2
+    2->1: 2x2, s = 2
     """
 
     def __init__(self,
@@ -28,7 +31,7 @@ class FPNSE04(nn.Module):
                  norm_cfg=None,
                  act_cfg=None,
                  upsample_cfg=dict(mode='nearest')):
-        super(FPNSE04, self).__init__()
+        super(FPNSE08, self).__init__()
         assert isinstance(in_channels, list)
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -94,26 +97,6 @@ class FPNSE04(nn.Module):
             self.fpn_convs.append(fpn_conv)
             self.fpnse_convs.append(fpnse_conv)
 
-        # add extra conv layers (e.g., RetinaNet)
-        extra_levels = num_outs - self.backbone_end_level + self.start_level  # extra_levels = 1
-        if self.add_extra_convs and extra_levels >= 1:
-            for i in range(extra_levels):
-                if i == 0 and self.add_extra_convs == 'on_input':
-                    in_channels = self.in_channels[self.backbone_end_level - 1]
-                else:
-                    in_channels = out_channels
-                extra_fpn_conv = ConvModule(
-                    in_channels,
-                    out_channels,
-                    3,
-                    stride=2,
-                    padding=1,
-                    conv_cfg=conv_cfg,
-                    norm_cfg=norm_cfg,
-                    act_cfg=act_cfg,
-                    inplace=False)
-                self.fpn_convs.append(extra_fpn_conv)
-
     # default init_weights for conv(msra) and norm in ConvModule
     def init_weights(self):
         """Initialize the weights of FPN module"""
@@ -141,21 +124,6 @@ class FPNSE04(nn.Module):
             laterals[i - 1] += F.interpolate(
                 laterals[i], size=prev_shape, **self.upsample_cfg)
 
-        ## no use
-        # 01. 横向连接与上采样结果进行cat
-        # 中间cat结果
-        # inter_results = [torch.cat([lateral, upsamples_results[i + 1]], dim=1) for i, lateral in enumerate(laterals)]
-
-        # 02. 做fpnseconv
-        # fpnse_conv_outs = [fpnse_conv(inter_results[i]) for i, fpnse_conv in enumerate(self.fpnse_convs)]
-        ## no use end
-
-        # build outputs
-        # part 1: from original levels
-        # outs = [
-        #     self.fpn_convs[i](laterals[i]) for i in range(used_backbone_levels)
-        # ]
-
         outs = []
         # print("used_backbone_levels", used_backbone_levels)
         for i in range(used_backbone_levels):
@@ -177,22 +145,6 @@ class FPNSE04(nn.Module):
             if not self.add_extra_convs:
                 for i in range(self.num_outs - used_backbone_levels):
                     outs.append(F.max_pool2d(outs[-1], 1, stride=2))
-            # add conv layers on top of original feature maps (RetinaNet)
-            else:
-                if self.add_extra_convs == 'on_input':
-                    extra_source = inputs[self.backbone_end_level - 1]
-                elif self.add_extra_convs == 'on_lateral':
-                    extra_source = laterals[-1]
-                elif self.add_extra_convs == 'on_output':
-                    extra_source = outs[-1]
-                else:
-                    raise NotImplementedError
-                outs.append(self.fpn_convs[used_backbone_levels](extra_source))
-                for i in range(used_backbone_levels + 1, self.num_outs):
-                    if self.relu_before_extra_convs:
-                        outs.append(self.fpn_convs[i](F.relu(outs[-1])))
-                    else:
-                        outs.append(self.fpn_convs[i](outs[-1]))
         return tuple(outs), self.kernel_out
 
 
@@ -215,29 +167,28 @@ class FPNSE_Conv(nn.Module):
     def forward(self, inputs):
         w3 = self.w[-self.out_channels:, :, :, :]
         # w2 center是对w3进行pooling
-        w2_center = F.avg_pool2d(w3, kernel_size=(3, 3), stride=1)  # [256, 256, 3, 3]
+        w2_center = F.max_pool2d(w3, kernel_size=(2, 2), stride=2)  # [256, 256, 2, 2]
         # print("w2_center:", w2_center.shape)
         w2 = self.w[self.out_channels:-self.out_channels, :, :, :]
         w2_p1 = w2[:, :, :1, :]
-        w2_p2 = w2[:, :, -1:, :]
-        w2_p3 = w2[:, :, 1:-1, :1]
-        w2_p4 = w2[:, :, 1:-1, -1:]
+        w2_p2 = w2[:, :, -2:, :]
+        w2_p3 = w2[:, :, 1:-2, :1]
+        w2_p4 = w2[:, :, 1:-2, -2:]
 
-        w2_o1 = torch.cat([w2_p3, w2_center, w2_p4], dim=3)  # [256, 256, 3, 5]
+        w2_o1 = torch.cat([w2_p3, w2_center, w2_p4], dim=3)  # [256, 256, 2, 5]
         # print("w2_o1.shape:", w2_o1.shape)
         w2_o2 = torch.cat([w2_p1, w2_o1, w2_p2], dim=2)  # [256, 256, 5, 5]
         # print("w2_o2.shape:", w2_o2.shape)
 
-
         # w2 center是对w2进行pooling
-        w1_center = F.avg_pool2d(w2_o2, kernel_size=(5, 5), stride=1)  # [256, 256, 1, 1]
+        w1_center = F.max_pool2d(w2_o2, kernel_size=(2, 2), stride=2)  # [256, 256, 2, 2]
         # print("w1_center:", w1_center.shape)
         w1 = self.w[:self.out_channels, :, :, :]
-        w1_p1 = w1[:, :, :2, :]
+        w1_p1 = w1[:, :, :1, :]
         w1_p2 = w1[:, :, -2:, :]
-        w1_p3 = w1[:, :, 2:-2, :2]
-        w1_p4 = w1[:, :, 2:-2, -2:]
-        w1_o1 = torch.cat([w1_p3, w1_center, w1_p4], dim=3)  # [256, 256, 1, 5]
+        w1_p3 = w1[:, :, 1:-2, :1]
+        w1_p4 = w1[:, :, 1:-2, -2:]
+        w1_o1 = torch.cat([w1_p3, w1_center, w1_p4], dim=3)  # [256, 256, 2, 5]
         # print("w1_o1.shape:", w1_o1.shape)
         w1_o2 = torch.cat([w1_p1, w1_o1, w1_p2], dim=2)  # [256, 256, 5, 5]
         # print("w1_o2.shape:", w1_o2.shape)

@@ -11,6 +11,7 @@ from mmdet.datasets import (build_dataloader, build_dataset,
 
 from mmrotate.utils import (build_ddp, build_dp, compat_cfg,
                             find_latest_checkpoint, get_root_logger)
+from mmrotate.models.optimizer import SeOptimizerHook
 
 
 def train_detector(model,
@@ -20,6 +21,13 @@ def train_detector(model,
                    validate=False,
                    timestamp=None,
                    meta=None):
+
+    print("model name param")
+    for i, tmp in enumerate(model.named_parameters()):
+        print(i)
+        print(tmp[0])
+        print(tmp[1].shape)
+
 
     cfg = compat_cfg(cfg)
     logger = get_root_logger(log_level=cfg.log_level)
@@ -88,6 +96,7 @@ def train_detector(model,
         optimizer_config = Fp16OptimizerHook(
             **cfg.optimizer_config, **fp16_cfg, distributed=distributed)
     elif distributed and 'type' not in cfg.optimizer_config:
+        ## here
         optimizer_config = OptimizerHook(**cfg.optimizer_config)
     else:
         optimizer_config = cfg.optimizer_config

@@ -7,11 +7,14 @@ from ..builder import ROTATED_NECKS
 
 
 @ROTATED_NECKS.register_module()
-class FPNSE04(nn.Module):
+class FPNSE06(nn.Module):
     """
     等变卷积核大小 1, 3, 5
 
     3-2-1：pooling + padding
+
+    3->2: 3x3, s = 2
+    2->1: 3x3, s = 2
     """
 
     def __init__(self,
@@ -28,7 +31,7 @@ class FPNSE04(nn.Module):
                  norm_cfg=None,
                  act_cfg=None,
                  upsample_cfg=dict(mode='nearest')):
-        super(FPNSE04, self).__init__()
+        super(FPNSE06, self).__init__()
         assert isinstance(in_channels, list)
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -215,29 +218,29 @@ class FPNSE_Conv(nn.Module):
     def forward(self, inputs):
         w3 = self.w[-self.out_channels:, :, :, :]
         # w2 center是对w3进行pooling
-        w2_center = F.avg_pool2d(w3, kernel_size=(3, 3), stride=1)  # [256, 256, 3, 3]
+        w2_center = F.avg_pool2d(w3, kernel_size=(3, 3), stride=2)  # [256, 256, 2, 2]
         # print("w2_center:", w2_center.shape)
         w2 = self.w[self.out_channels:-self.out_channels, :, :, :]
         w2_p1 = w2[:, :, :1, :]
-        w2_p2 = w2[:, :, -1:, :]
-        w2_p3 = w2[:, :, 1:-1, :1]
-        w2_p4 = w2[:, :, 1:-1, -1:]
+        w2_p2 = w2[:, :, -2:, :]
+        w2_p3 = w2[:, :, 1:-2, :1]
+        w2_p4 = w2[:, :, 1:-2, -2:]
 
-        w2_o1 = torch.cat([w2_p3, w2_center, w2_p4], dim=3)  # [256, 256, 3, 5]
+        w2_o1 = torch.cat([w2_p3, w2_center, w2_p4], dim=3)  # [256, 256, 2, 5]
         # print("w2_o1.shape:", w2_o1.shape)
         w2_o2 = torch.cat([w2_p1, w2_o1, w2_p2], dim=2)  # [256, 256, 5, 5]
         # print("w2_o2.shape:", w2_o2.shape)
 
 
         # w2 center是对w2进行pooling
-        w1_center = F.avg_pool2d(w2_o2, kernel_size=(5, 5), stride=1)  # [256, 256, 1, 1]
+        w1_center = F.avg_pool2d(w2_o2, kernel_size=(3, 3), stride=2)  # [256, 256, 3, 3]
         # print("w1_center:", w1_center.shape)
         w1 = self.w[:self.out_channels, :, :, :]
-        w1_p1 = w1[:, :, :2, :]
+        w1_p1 = w1[:, :, :1, :]
         w1_p2 = w1[:, :, -2:, :]
-        w1_p3 = w1[:, :, 2:-2, :2]
-        w1_p4 = w1[:, :, 2:-2, -2:]
-        w1_o1 = torch.cat([w1_p3, w1_center, w1_p4], dim=3)  # [256, 256, 1, 5]
+        w1_p3 = w1[:, :, 1:-2, :1]
+        w1_p4 = w1[:, :, 1:-2, -2:]
+        w1_o1 = torch.cat([w1_p3, w1_center, w1_p4], dim=3)  # [256, 256, 2, 5]
         # print("w1_o1.shape:", w1_o1.shape)
         w1_o2 = torch.cat([w1_p1, w1_o1, w1_p2], dim=2)  # [256, 256, 5, 5]
         # print("w1_o2.shape:", w1_o2.shape)

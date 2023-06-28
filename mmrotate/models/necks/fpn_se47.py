@@ -1,17 +1,23 @@
+import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from mmcv.cnn import ConvModule, xavier_init
+from torch.nn import init
 
 from ..builder import ROTATED_NECKS
 
 
 @ROTATED_NECKS.register_module()
-class FPNSE04(nn.Module):
+class FPNSE47(nn.Module):
     """
     等变卷积核大小 1, 3, 5
 
     3-2-1：pooling + padding
+
+    3->2: 2x2, s = 2
+    2->1: 2x2, s = 2
     """
 
     def __init__(self,
@@ -28,7 +34,7 @@ class FPNSE04(nn.Module):
                  norm_cfg=None,
                  act_cfg=None,
                  upsample_cfg=dict(mode='nearest')):
-        super(FPNSE04, self).__init__()
+        super(FPNSE47, self).__init__()
         assert isinstance(in_channels, list)
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -167,7 +173,7 @@ class FPNSE04(nn.Module):
             while j < channels:
                 out_fused += out[:, j:j + self.out_channels, :, :]
                 j = j + self.out_channels
-
+            out_fused = out_fused / 3.0
             outs.append(out_fused)
 
         # part 2: add extra levels
@@ -211,37 +217,50 @@ class FPNSE_Conv(nn.Module):
         # self.w2 = None
         # self.w3 = nn.Parameter(torch.randn(out_channels, in_channels, self.kernel_size, self.kernel_size),
         #                        requires_grad=True)
+        self.bias = nn.Parameter(torch.empty(3 * out_channels), requires_grad=True)
+        self.reset_parameters()
+
+    # from pytorch
+    def reset_parameters(self) -> None:
+        # Setting a=sqrt(5) in kaiming_uniform is the same as initializing with
+        # uniform(-1/sqrt(k), 1/sqrt(k)), where k = weight.size(1) * prod(*kernel_size)
+        # For more details see: https://github.com/pytorch/pytorch/issues/15314#issuecomment-477448573
+        init.kaiming_uniform_(self.w, a=math.sqrt(5))
+        if self.bias is not None:
+            fan_in, _ = init._calculate_fan_in_and_fan_out(self.w)
+            if fan_in != 0:
+                bound = 1 / math.sqrt(fan_in)
+                init.uniform_(self.bias, -bound, bound)
 
     def forward(self, inputs):
         w3 = self.w[-self.out_channels:, :, :, :]
         # w2 center是对w3进行pooling
-        w2_center = F.avg_pool2d(w3, kernel_size=(3, 3), stride=1)  # [256, 256, 3, 3]
+        w2_center = F.avg_pool2d(w3, kernel_size=(2, 2), stride=2)  # [256, 256, 2, 2]
         # print("w2_center:", w2_center.shape)
         w2 = self.w[self.out_channels:-self.out_channels, :, :, :]
         w2_p1 = w2[:, :, :1, :]
-        w2_p2 = w2[:, :, -1:, :]
-        w2_p3 = w2[:, :, 1:-1, :1]
-        w2_p4 = w2[:, :, 1:-1, -1:]
+        w2_p2 = w2[:, :, -2:, :]
+        w2_p3 = w2[:, :, 1:-2, :1]
+        w2_p4 = w2[:, :, 1:-2, -2:]
 
-        w2_o1 = torch.cat([w2_p3, w2_center, w2_p4], dim=3)  # [256, 256, 3, 5]
+        w2_o1 = torch.cat([w2_p3, w2_center, w2_p4], dim=3)  # [256, 256, 2, 5]
         # print("w2_o1.shape:", w2_o1.shape)
         w2_o2 = torch.cat([w2_p1, w2_o1, w2_p2], dim=2)  # [256, 256, 5, 5]
         # print("w2_o2.shape:", w2_o2.shape)
 
-
         # w2 center是对w2进行pooling
-        w1_center = F.avg_pool2d(w2_o2, kernel_size=(5, 5), stride=1)  # [256, 256, 1, 1]
+        w1_center = F.avg_pool2d(w2_o2, kernel_size=(2, 2), stride=2)  # [256, 256, 2, 2]
         # print("w1_center:", w1_center.shape)
         w1 = self.w[:self.out_channels, :, :, :]
-        w1_p1 = w1[:, :, :2, :]
+        w1_p1 = w1[:, :, :1, :]
         w1_p2 = w1[:, :, -2:, :]
-        w1_p3 = w1[:, :, 2:-2, :2]
-        w1_p4 = w1[:, :, 2:-2, -2:]
-        w1_o1 = torch.cat([w1_p3, w1_center, w1_p4], dim=3)  # [256, 256, 1, 5]
+        w1_p3 = w1[:, :, 1:-2, :1]
+        w1_p4 = w1[:, :, 1:-2, -2:]
+        w1_o1 = torch.cat([w1_p3, w1_center, w1_p4], dim=3)  # [256, 256, 2, 5]
         # print("w1_o1.shape:", w1_o1.shape)
         w1_o2 = torch.cat([w1_p1, w1_o1, w1_p2], dim=2)  # [256, 256, 5, 5]
         # print("w1_o2.shape:", w1_o2.shape)
 
         w = torch.cat([w1_o2, w2_o2, w3], dim=0)
-        outputs = F.conv2d(inputs, w, stride=self.stride, padding=self.padding, dilation=self.dilation)
+        outputs = F.conv2d(inputs, w, bias=self.bias, stride=self.stride, padding=self.padding, dilation=self.dilation)
         return outputs, self.w

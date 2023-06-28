@@ -1,13 +1,16 @@
+import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from mmcv.cnn import ConvModule, xavier_init
+from torch.nn import init
 
 from ..builder import ROTATED_NECKS
 
 
 @ROTATED_NECKS.register_module()
-class FPNSE04(nn.Module):
+class FPNSE44(nn.Module):
     """
     等变卷积核大小 1, 3, 5
 
@@ -28,7 +31,7 @@ class FPNSE04(nn.Module):
                  norm_cfg=None,
                  act_cfg=None,
                  upsample_cfg=dict(mode='nearest')):
-        super(FPNSE04, self).__init__()
+        super(FPNSE44, self).__init__()
         assert isinstance(in_channels, list)
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -168,6 +171,7 @@ class FPNSE04(nn.Module):
                 out_fused += out[:, j:j + self.out_channels, :, :]
                 j = j + self.out_channels
 
+            out_fused = out_fused / 3.0
             outs.append(out_fused)
 
         # part 2: add extra levels
@@ -211,7 +215,20 @@ class FPNSE_Conv(nn.Module):
         # self.w2 = None
         # self.w3 = nn.Parameter(torch.randn(out_channels, in_channels, self.kernel_size, self.kernel_size),
         #                        requires_grad=True)
+        self.bias = nn.Parameter(torch.empty(3 * out_channels), requires_grad=True)
+        self.reset_parameters()
 
+    # from pytorch
+    def reset_parameters(self) -> None:
+        # Setting a=sqrt(5) in kaiming_uniform is the same as initializing with
+        # uniform(-1/sqrt(k), 1/sqrt(k)), where k = weight.size(1) * prod(*kernel_size)
+        # For more details see: https://github.com/pytorch/pytorch/issues/15314#issuecomment-477448573
+        init.kaiming_uniform_(self.w, a=math.sqrt(5))
+        if self.bias is not None:
+            fan_in, _ = init._calculate_fan_in_and_fan_out(self.w)
+            if fan_in != 0:
+                bound = 1 / math.sqrt(fan_in)
+                init.uniform_(self.bias, -bound, bound)
     def forward(self, inputs):
         w3 = self.w[-self.out_channels:, :, :, :]
         # w2 center是对w3进行pooling
@@ -243,5 +260,5 @@ class FPNSE_Conv(nn.Module):
         # print("w1_o2.shape:", w1_o2.shape)
 
         w = torch.cat([w1_o2, w2_o2, w3], dim=0)
-        outputs = F.conv2d(inputs, w, stride=self.stride, padding=self.padding, dilation=self.dilation)
+        outputs = F.conv2d(inputs, w, bias=self.bias, stride=self.stride, padding=self.padding, dilation=self.dilation)
         return outputs, self.w
