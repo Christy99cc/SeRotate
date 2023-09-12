@@ -25,6 +25,7 @@ from .fpn_se47 import FPNSE47
 from .fpn_se34 import FPNSE34
 
 from .fpn_se42_s import FPNSE42S
+from .fpn_se43_s import FPNSE43S
 from .fpn_se44_s import FPNSE44S
 from .fpn_se45_s import FPNSE45S
 from .fpn_se46_s import FPNSE46S
@@ -34,5 +35,7 @@ from .fpn_se48_s import FPNSE48S
 from .fpn_se55_s import FPNSE55S
 from .fpn_se58_s import FPNSE58S
 
+from .my_neck1 import MyNeck1
+
 __all__ = ['ReFPN', 'FPNSE02', 'FPNSE04', 'FPNSE05', 'FPNSE06', 'FPNSE07', 'FPNSE08', 'FPNSE09', 'FPNSE10', 'FPNSE11',
-           'FPNSE12', 'FPNSE13', 'FPNSE22']
+           'FPNSE12', 'FPNSE13', 'FPNSE22', 'MyNeck1']
