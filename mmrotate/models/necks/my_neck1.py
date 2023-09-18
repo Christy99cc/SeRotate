@@ -8,6 +8,7 @@ from mmcv.runner import BaseModule, auto_fp16
 from ..builder import ROTATED_NECKS
 from ..utils.util import get_norm, get_activation
 
+
 @ROTATED_NECKS.register_module()
 class MyNeck1(BaseModule):
     r"""Base Feature Pyramid Network.
@@ -72,6 +73,8 @@ class MyNeck1(BaseModule):
                  conv_cfg=None,
                  norm_cfg=None,
                  act_cfg=None,
+                 block_dilations=[4, 8],
+                 mid_channels=128,
                  upsample_cfg=dict(mode='nearest'),
                  init_cfg=dict(
                      type='Xavier', layer='Conv2d', distribution='uniform')):
@@ -85,7 +88,6 @@ class MyNeck1(BaseModule):
         self.no_norm_on_lateral = no_norm_on_lateral
         self.fp16_enabled = False
         self.upsample_cfg = upsample_cfg.copy()
-
 
         if end_level == -1 or end_level == self.num_ins - 1:
             self.backbone_end_level = self.num_ins
@@ -110,8 +112,8 @@ class MyNeck1(BaseModule):
         self.dilated_encoder_blocks = nn.ModuleList()
 
         # myneck1 settings
-        self.num_residual_blocks = 2
-        self.block_dilations = [2, 4]
+        self.num_residual_blocks = len(block_dilations)
+        self.block_dilations = block_dilations
         for i in range(self.start_level, self.backbone_end_level):
             l_conv = ConvModule(
                 in_channels[i],
@@ -137,7 +139,7 @@ class MyNeck1(BaseModule):
                 encoder_blocks.append(
                     Bottleneck(
                         out_channels,
-                        mid_channels=128,            # 可改设置
+                        mid_channels=mid_channels,  # 可改设置
                         dilation=dilation,
                         # norm_type=self.norm_type,  # BN
                         # act_type=self.act_type     # ReLU
@@ -147,7 +149,6 @@ class MyNeck1(BaseModule):
             self.lateral_convs.append(l_conv)
             self.fpn_convs.append(fpn_conv)
             self.dilated_encoder_blocks.append(nn.Sequential(*encoder_blocks))
-
 
         # add extra conv layers (e.g., RetinaNet)
         extra_levels = num_outs - self.backbone_end_level + self.start_level
