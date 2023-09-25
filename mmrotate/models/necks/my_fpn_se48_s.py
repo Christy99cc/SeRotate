@@ -35,7 +35,7 @@ class MyFPNSE48S(nn.Module):
                  norm_cfg=None,
                  act_cfg=None,
                  upsample_cfg=dict(mode='nearest')):
-        super(FPNSE48S, self).__init__()
+        super(MyFPNSE48S, self).__init__()
         assert isinstance(in_channels, list)
         self.in_channels = in_channels
         self.out_channels = out_channels
