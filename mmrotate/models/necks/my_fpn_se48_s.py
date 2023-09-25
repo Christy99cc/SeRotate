@@ -11,7 +11,7 @@ from ..builder import ROTATED_NECKS
 
 
 @ROTATED_NECKS.register_module()
-class FPNSE48S(nn.Module):
+class MyFPNSE48S(nn.Module):
     """
     等变卷积核大小 1 3 5
 

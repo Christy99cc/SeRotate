@@ -36,6 +36,7 @@ from .fpn_se55_s import FPNSE55S
 from .fpn_se58_s import FPNSE58S
 
 from .my_neck1 import MyNeck1
+from .my_fpn_se48_s import MyFPNSE48S
 
 __all__ = ['ReFPN', 'FPNSE02', 'FPNSE04', 'FPNSE05', 'FPNSE06', 'FPNSE07', 'FPNSE08', 'FPNSE09', 'FPNSE10', 'FPNSE11',
-           'FPNSE12', 'FPNSE13', 'FPNSE22', 'MyNeck1']
+           'FPNSE12', 'FPNSE13', 'FPNSE22', 'MyNeck1', 'MyFPNSE48S']
