@@ -156,7 +156,7 @@ class MyFPNSE48S(nn.Module):
             out_fused = out[:, 0: self.out_channels, :, :]
             j = self.out_channels
             while j < channels:
-                out_fused += out[:, j:j + self.out_channels, :, :]
+                out_fused = out_fused + out[:, j:j + self.out_channels, :, :]
                 j = j + self.out_channels
             out_fused = out_fused / 3.0
             outs.append(out_fused)
@@ -206,13 +206,6 @@ class FPNSE_Conv(nn.Module):
         #                        requires_grad=True)
         self.bias = nn.Parameter(torch.empty(3 * out_channels), requires_grad=True)
 
-        norm_channels = 3 * out_channels
-        self.norm_name, norm = build_norm_layer(
-            norm_cfg, norm_channels)  # type: ignore
-
-        act_cfg_ = act_cfg.copy()  # type: ignore
-        self.activate = build_activation_layer(act_cfg_)
-
         self.reset_parameters()
 
     @property
@@ -258,7 +251,6 @@ class FPNSE_Conv(nn.Module):
         w = torch.cat([w1_o2, w2, w3], dim=0)
         outputs = F.conv2d(inputs, w, bias=self.bias, stride=self.stride, padding=self.padding, dilation=self.dilation)
 
-        outputs = self.norm(outputs)
-        outputs = self.activate(outputs)
+        o = F.relu(outputs)
 
-        return outputs, self.w12
+        return o, self.w12
