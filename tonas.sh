@@ -26,3 +26,6 @@ fi
 # -e ssh ：使用 ssh 作为远程 shell，这样所有的东西都被加密
 # --exclude='*.out' ：排除匹配模式的文件，例如 *.out 或 *.c 等。
 
+#rsync -rltDvz -e ./../* zhuxiaotong@192.168.88.10:/mnt/sda/dota
+
+

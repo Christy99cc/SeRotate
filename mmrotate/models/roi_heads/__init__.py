@@ -6,9 +6,11 @@ from .oriented_standard_roi_head import OrientedStandardRoIHead
 from .roi_extractors import RotatedSingleRoIExtractor
 from .roi_trans_roi_head import RoITransRoIHead
 from .rotate_standard_roi_head import RotatedStandardRoIHead
+from .my_trident_roi_head import MyTridentRoIHead
 
 __all__ = [
     'RotatedBBoxHead', 'RotatedConvFCBBoxHead', 'RotatedShared2FCBBoxHead',
     'RotatedStandardRoIHead', 'RotatedSingleRoIExtractor',
-    'OrientedStandardRoIHead', 'RoITransRoIHead', 'GVRatioRoIHead'
+    'OrientedStandardRoIHead', 'RoITransRoIHead', 'GVRatioRoIHead',
+    'MyTridentRoIHead'
 ]

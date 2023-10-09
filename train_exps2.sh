@@ -33,5 +33,8 @@
 #CUDA_VISIBLE_DEVICES=3 python ./tools/test.py configs/se/rotated_faster_rcnn_r50_fpnse47_1x_dota_le90_ss.py ./work_dirs/rotated_faster_rcnn_r50_fpnse47_1x_dota_le90_ss/epoch_12.pth --format-only --eval-options submission_dir=work_dirs/Task1_results47
 #
 
-CUDA_VISIBLE_DEVICES=2,3 OMP_NUM_THREADS=0 ./tools/dist_train.sh configs/myexps/rotated_fcos_r50_atrous_1x_dota_le90.py 2
-CUDA_VISIBLE_DEVICES=0 OMP_NUM_THREADS=0 python ./tools/test.py configs/myexps/rotated_fcos_r50_atrous_1x_dota_le90.py ./work_dirs/rotated_fcos_r50_atrous_1x_dota_le90/epoch_12.pth --format-only --eval-options submission_dir=work_dirs/Task1_results_rotated_fcos_r50_atrous_1x_dota_le90_0915
+#CUDA_VISIBLE_DEVICES=2,3 OMP_NUM_THREADS=0 ./tools/dist_train.sh configs/myexps/rotated_fcos_r50_atrous_1x_dota_le90.py 2
+#CUDA_VISIBLE_DEVICES=0 OMP_NUM_THREADS=0 python ./tools/test.py configs/myexps/rotated_fcos_r50_atrous_1x_dota_le90.py ./work_dirs/rotated_fcos_r50_atrous_1x_dota_le90/epoch_12.pth --format-only --eval-options submission_dir=work_dirs/Task1_results_rotated_fcos_r50_atrous_1x_dota_le90_0915
+
+CUDA_VISIBLE_DEVICES=5 OMP_NUM_THREADS=0 ./tools/dist_train.sh configs/myexps/tridentnet_exp1.py 1
+CUDA_VISIBLE_DEVICES=5 OMP_NUM_THREADS=0 python ./tools/test.py configs/myexps/tridentnet_exp1.py ./work_dirs/tridentnet_exp1/epoch_12.pth --format-only --eval-options submission_dir=work_dirs/Task1_results_faster_tridentnet_exp1_0927

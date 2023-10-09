@@ -11,14 +11,14 @@ from ..builder import ROTATED_NECKS
 
 
 @ROTATED_NECKS.register_module()
-class MyFPNSE48S(nn.Module):
+class MyFPNSE48S2(nn.Module):
     """
     等变卷积核大小 1 3 5
 
     2->1：pooling + padding
     2->3: clip + inter
 
-    relu
+    bn + relu
     """
 
     def __init__(self,
@@ -35,7 +35,7 @@ class MyFPNSE48S(nn.Module):
                  norm_cfg=None,
                  act_cfg=None,
                  upsample_cfg=dict(mode='nearest')):
-        super(MyFPNSE48S, self).__init__()
+        super(MyFPNSE48S2, self).__init__()
         assert isinstance(in_channels, list)
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -251,6 +251,7 @@ class FPNSE_Conv(nn.Module):
         w = torch.cat([w1_o2, w2, w3], dim=0)
         outputs = F.conv2d(inputs, w, bias=self.bias, stride=self.stride, padding=self.padding, dilation=self.dilation)
 
-        o = F.relu(outputs)
+        o = F.normalize(outputs)
+        o = F.relu(o)
 
         return o, self.w12

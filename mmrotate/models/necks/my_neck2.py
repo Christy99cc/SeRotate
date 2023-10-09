@@ -11,12 +11,14 @@ from ..builder import ROTATED_NECKS
 
 
 @ROTATED_NECKS.register_module()
-class MyFPNSE48S(nn.Module):
+class MyNeck2(nn.Module):
     """
     等变卷积核大小 1 3 5
 
     2->1：pooling + padding
     2->3: clip + inter
+
+    只在c3上做
 
     relu
     """
@@ -35,7 +37,7 @@ class MyFPNSE48S(nn.Module):
                  norm_cfg=None,
                  act_cfg=None,
                  upsample_cfg=dict(mode='nearest')):
-        super(MyFPNSE48S, self).__init__()
+        super(MyNeck2, self).__init__()
         assert isinstance(in_channels, list)
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -74,7 +76,7 @@ class MyFPNSE48S(nn.Module):
         self.fpn_convs = nn.ModuleList()
         self.fpnse_convs = nn.ModuleList()
 
-        for i in range(self.start_level, self.backbone_end_level):  # range(0, 4)
+        for i in range(self.start_level, self.backbone_end_level):
             l_conv = ConvModule(
                 in_channels[i],
                 out_channels,
@@ -93,12 +95,12 @@ class MyFPNSE48S(nn.Module):
                 act_cfg=act_cfg,
                 inplace=False)
 
-            # if i < 3:
-            fpnse_conv = FPNSE_Conv(out_channels, out_channels)
+            if i == 1:
+               fpnse_conv = FPNSE_Conv(out_channels, out_channels)
+               self.fpnse_convs.append(fpnse_conv)
 
             self.lateral_convs.append(l_conv)
             self.fpn_convs.append(fpn_conv)
-            self.fpnse_convs.append(fpnse_conv)
 
         # add extra conv layers (e.g., RetinaNet)
         extra_levels = num_outs - self.backbone_end_level + self.start_level  # extra_levels = 1
@@ -150,6 +152,10 @@ class MyFPNSE48S(nn.Module):
         outs = []
         # print("used_backbone_levels", used_backbone_levels)
         for i in range(used_backbone_levels):
+            if i > 0:
+                outs.append(self.fpn_convs[i](laterals[i]))
+                continue
+
             out, self.kernel_out = self.fpnse_convs[i](laterals[i])
             channels = out.shape[1]
 
@@ -251,6 +257,7 @@ class FPNSE_Conv(nn.Module):
         w = torch.cat([w1_o2, w2, w3], dim=0)
         outputs = F.conv2d(inputs, w, bias=self.bias, stride=self.stride, padding=self.padding, dilation=self.dilation)
 
+        outputs = F.normalize(outputs)
         o = F.relu(outputs)
 
         return o, self.w12

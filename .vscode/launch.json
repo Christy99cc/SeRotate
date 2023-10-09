@@ -1,0 +1,16 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "test",
+        "type": "python",
+        "request": "launch",
+        "program": "${workspaceFolder}/tools/train.py",
+        "console": "integratedTerminal",
+        "args": [
+          "config=configs/myexps/tridentnet_exp1.py",
+          "gpus=1"
+        ]
+      }
+    ]
+  }

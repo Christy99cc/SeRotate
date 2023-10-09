@@ -1,10 +1,10 @@
 {
   "nproc": 10,
   "img_dirs": [
-    "/home/user/Database/dota/dota1_5/val/images/"
+    "/mnt/sda/dota/dota1_5/val/images/"
   ],
   "ann_dirs": [
-    "/home/user/Database/dota/dota1_5/val/labelTxt/"
+    "/mnt/sda/dota/dota1_5/val/labelTxt/"
   ],
   "sizes": [
     1024
@@ -23,6 +23,6 @@
     116,
     124
   ],
-  "save_dir": "/home/user/Database/dota/split_ss_1024_dota/val/",
+  "save_dir": "/mnt/sda/dota/split_ss_1024_dota/val/",
   "save_ext": ".png"
 }

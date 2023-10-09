@@ -19,7 +19,7 @@ model = dict(
         style='pytorch',
         init_cfg=dict(type='Pretrained', checkpoint='torchvision://resnet50')),
     neck=dict(
-        type='MyFPNSE48S',
+        type='MyNeck1',
         in_channels=[256, 512, 1024, 2048],
         out_channels=256,
         start_level=1,
@@ -79,8 +79,3 @@ data = dict(
     train=dict(pipeline=train_pipeline, version=angle_version),
     val=dict(version=angle_version),
     test=dict(version=angle_version))
-
-
-# resume_from='./work_dirs/rotated_fcos_r50_myfpnse48s_1x_dota_le90/latest.pth'
-
-find_unused_parameters=True
