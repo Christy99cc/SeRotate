@@ -14,6 +14,7 @@ from .single_stage import RotatedSingleStageDetector
 from .two_stage import RotatedTwoStageDetector
 from .rotate_faster_rcnn_fpnse import RotatedFasterRCNNFPNSE
 from .rotate_faster_rcnn_fpnse48 import RotatedFasterRCNNFPNSE48
+from .my_trident_fasterrcnn import MyTridentFasterRCNN
 
 __all__ = [
     'RotatedRetinaNet', 'RotatedFasterRCNN', 'OrientedRCNN', 'RoITransformer',

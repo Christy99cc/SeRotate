@@ -2,6 +2,10 @@ _base_ = [
     '../_base_/datasets/dotav1.py', '../_base_/schedules/schedule_1x.py',
     '../_base_/default_runtime.py'
 ]
+# dataset settings
+dataset_type = 'DOTADataset'
+# data_root = 'data/split_ss_dota1_0/'
+data_root = 'data/split_ss_1024_dota/'
 angle_version = 'le90'
 
 # model settings
@@ -77,10 +81,39 @@ train_pipeline = [
     dict(type='DefaultFormatBundle'),
     dict(type='Collect', keys=['img', 'gt_bboxes', 'gt_labels'])
 ]
+test_pipeline = [
+    dict(type='LoadImageFromFile'),
+    dict(
+        type='MultiScaleFlipAug',
+        img_scale=(1024, 1024),
+        flip=False,
+        transforms=[
+            dict(type='RResize'),
+            dict(type='Normalize', **img_norm_cfg),
+            dict(type='Pad', size_divisor=32),
+            dict(type='DefaultFormatBundle'),
+            dict(type='Collect', keys=['img'])
+        ])
+]
 data = dict(
-    train=dict(pipeline=train_pipeline, version=angle_version),
-    val=dict(version=angle_version),
-    test=dict(version=angle_version))
+    samples_per_gpu=4,
+    workers_per_gpu=2,
+    train=dict(
+        type=dataset_type,
+        ann_file=data_root + 'trainval/annfiles/',
+        img_prefix=data_root + 'trainval/images/',
+        pipeline=train_pipeline),
+    val=dict(
+        type=dataset_type,
+        ann_file=data_root + 'val/annfiles/',
+        img_prefix=data_root + 'val/images/',
+        pipeline=test_pipeline),
+    test=dict(
+        type=dataset_type,
+        ann_file=data_root + 'test/images/',
+        img_prefix=data_root + 'test/images/',
+        pipeline=test_pipeline))
+
 
 runner = dict(type='EpochBasedRunner', max_epochs=99999)
 evaluation = dict(interval=9999, metric='mAP')

@@ -170,7 +170,7 @@ class RotatedStandardRoIHead(BaseModule, metaclass=ABCMeta):
             x[:self.bbox_roi_extractor.num_inputs], rois)
         if self.with_shared_head:
             bbox_feats = self.shared_head(bbox_feats)
-        cls_score, bbox_pred = self.bbox_head(bbox_feats)
+        cls_score, bbox_pred = self.bbox_head(bbox_feats)  # bbox_feats:[3072,1024,7,7]
 
         bbox_results = dict(
             cls_score=cls_score, bbox_pred=bbox_pred, bbox_feats=bbox_feats)
