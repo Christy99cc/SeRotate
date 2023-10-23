@@ -21,9 +21,6 @@ class MyTridentRoIHead(RotatedStandardRoIHead):
     """
 
     def __init__(self, num_branch, test_branch_idx, **kwargs):
-        print("=========")
-        print(kwargs)
-
         self.num_branch = num_branch
         self.test_branch_idx = test_branch_idx
         super(MyTridentRoIHead, self).__init__(**kwargs)
