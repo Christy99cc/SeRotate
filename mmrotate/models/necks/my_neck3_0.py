@@ -11,7 +11,7 @@ from ..builder import ROTATED_NECKS
 
 
 @ROTATED_NECKS.register_module()
-class MyNeck3_1(nn.Module):
+class MyNeck3_0(nn.Module):
     """
     等变卷积核大小 5 x 5
     1 3 5
@@ -19,7 +19,7 @@ class MyNeck3_1(nn.Module):
     w1->w2：clip + 填补
     w2->w3: clip + 填补
 
-    拆开 cat
+
 
     relu
     """
@@ -38,7 +38,7 @@ class MyNeck3_1(nn.Module):
                  norm_cfg=None,
                  act_cfg=None,
                  upsample_cfg=dict(mode='nearest')):
-        super(MyNeck3_1, self).__init__()
+        super(MyNeck3_0, self).__init__()
         assert isinstance(in_channels, list)
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -205,12 +205,8 @@ class FPNSE_Conv(nn.Module):
         self.padding = padding
         self.dilation = dilation
         self.kernel_size = kernel_size
-        self.w1 = nn.Parameter(torch.randn(out_channels, in_channels, self.kernel_size, self.kernel_size),
+        self.w = nn.Parameter(torch.randn(3 * out_channels, in_channels, self.kernel_size, self.kernel_size),
                               requires_grad=True)
-        self.w2 = nn.Parameter(torch.randn(out_channels, in_channels, self.kernel_size, self.kernel_size),
-                               requires_grad=True)
-        self.w3 = nn.Parameter(torch.randn(out_channels, in_channels, self.kernel_size, self.kernel_size),
-                               requires_grad=True)
         self.bias = nn.Parameter(torch.empty(3 * out_channels), requires_grad=True)
         self.reset_parameters()
 
@@ -226,17 +222,17 @@ class FPNSE_Conv(nn.Module):
         # Setting a=sqrt(5) in kaiming_uniform is the same as initializing with
         # uniform(-1/sqrt(k), 1/sqrt(k)), where k = weight.size(1) * prod(*kernel_size)
         # For more details see: https://github.com/pytorch/pytorch/issues/15314#issuecomment-477448573
-        init.kaiming_uniform_(torch.cat([self.w1,self.w2,self.w3]), a=math.sqrt(5))
+        init.kaiming_uniform_(self.w, a=math.sqrt(5))
         if self.bias is not None:
-            fan_in, _ = init._calculate_fan_in_and_fan_out(torch.cat([self.w1,self.w2,self.w3]))
+            fan_in, _ = init._calculate_fan_in_and_fan_out(self.w)
             if fan_in != 0:
                 bound = 1 / math.sqrt(fan_in)
                 init.uniform_(self.bias, -bound, bound)
 
     def forward(self, inputs):
-        w1 = self.w1
-        w2 = self.w2
-        w3 = self.w3
+        w1 = self.w[0:self.out_channels, :, :, :]
+        w2 = self.w[self.out_channels:-self.out_channels, :, :, :]
+        w3 = self.w[-self.out_channels:0, :, :, :]
 
         w1_clip = w1[:, :, 1:-1, 1:-1]
         for i in range(3):
@@ -247,10 +243,9 @@ class FPNSE_Conv(nn.Module):
             for j in range(3):
                 w3[:, :, 2 * i, 2 * j] = w2_clip[:, :, i, j]
 
-        w = torch.cat([self.w1,self.w2,self.w3])
-        outputs = F.conv2d(inputs, w, bias=self.bias, stride=self.stride, padding=self.padding, dilation=self.dilation)
+        outputs = F.conv2d(inputs, self.w, bias=self.bias, stride=self.stride, padding=self.padding, dilation=self.dilation)
 
         # outputs = F.normalize(outputs)
         o = F.relu(outputs)
 
-        return o, w
+        return o, self.w
