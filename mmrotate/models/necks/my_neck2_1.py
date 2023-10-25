@@ -11,17 +11,16 @@ from ..builder import ROTATED_NECKS
 
 
 @ROTATED_NECKS.register_module()
-class MyNeck3(nn.Module):
+class MyNeck2_1(nn.Module):
     """
-    等变卷积核大小 5 x 5
-    1 3 5
+    等变卷积核大小 1 3 5
 
-    w1->w2：clip + 填补
-    w2->w3: clip + 填补
+    2->1：pooling + padding
+    2->3: clip + inter
 
+    只在c3上做
 
-
-    relu
+    without relu
     """
 
     def __init__(self,
@@ -38,7 +37,7 @@ class MyNeck3(nn.Module):
                  norm_cfg=None,
                  act_cfg=None,
                  upsample_cfg=dict(mode='nearest')):
-        super(MyNeck3, self).__init__()
+        super(MyNeck2_1, self).__init__()
         assert isinstance(in_channels, list)
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -96,9 +95,9 @@ class MyNeck3(nn.Module):
                 act_cfg=act_cfg,
                 inplace=False)
 
-            # if i == 1:
-            fpnse_conv = FPNSE_Conv(out_channels, out_channels)
-            self.fpnse_convs.append(fpnse_conv)
+            if i == 1:
+               fpnse_conv = FPNSE_Conv(out_channels, out_channels)
+               self.fpnse_convs.append(fpnse_conv)
 
             self.lateral_convs.append(l_conv)
             self.fpn_convs.append(fpn_conv)
@@ -153,9 +152,9 @@ class MyNeck3(nn.Module):
         outs = []
         # print("used_backbone_levels", used_backbone_levels)
         for i in range(used_backbone_levels):
-            # if i > 0:
-            #     outs.append(self.fpn_convs[i](laterals[i]))
-            #     continue
+            if i > 0:
+                outs.append(self.fpn_convs[i](laterals[i]))
+                continue
 
             out, self.kernel_out = self.fpnse_convs[i](laterals[i])
             channels = out.shape[1]
@@ -205,15 +204,13 @@ class FPNSE_Conv(nn.Module):
         self.padding = padding
         self.dilation = dilation
         self.kernel_size = kernel_size
-        self.w1 = nn.Parameter(torch.randn(out_channels, in_channels, self.kernel_size, self.kernel_size),
-                               requires_grad=True)
-        self.w2_t = nn.Parameter(
-            torch.randn(out_channels, in_channels, self.kernel_size ** 2 - (self.kernel_size // 2 + 1) ** 2),
-            requires_grad=True)
-        self.w3_t = nn.Parameter(
-            torch.randn(out_channels, in_channels, self.kernel_size ** 2 - (self.kernel_size // 2 + 1) ** 2),
-            requires_grad=True)
-        self.bias_t = nn.Parameter(torch.empty(out_channels), requires_grad=True)
+        self.w12 = nn.Parameter(torch.randn(2 * out_channels, in_channels, self.kernel_size, self.kernel_size),
+                                requires_grad=True)
+        # self.w3 = None
+        # self.w2 = None
+        # self.w3 = nn.Parameter(torch.randn(out_channels, in_channels, self.kernel_size, self.kernel_size),
+        #                        requires_grad=True)
+        self.bias = nn.Parameter(torch.empty(3 * out_channels), requires_grad=True)
 
         self.reset_parameters()
 
@@ -229,83 +226,38 @@ class FPNSE_Conv(nn.Module):
         # Setting a=sqrt(5) in kaiming_uniform is the same as initializing with
         # uniform(-1/sqrt(k), 1/sqrt(k)), where k = weight.size(1) * prod(*kernel_size)
         # For more details see: https://github.com/pytorch/pytorch/issues/15314#issuecomment-477448573
-        init.kaiming_uniform_(self.w1, a=math.sqrt(5))
-        init.kaiming_uniform_(self.w2_t, a=math.sqrt(5))
-        init.kaiming_uniform_(self.w3_t, a=math.sqrt(5))
-
-        if self.bias_t is not None:
-            fan_in, _ = init._calculate_fan_in_and_fan_out(self.w1)
+        init.kaiming_uniform_(self.w12, a=math.sqrt(5))
+        if self.bias is not None:
+            fan_in, _ = init._calculate_fan_in_and_fan_out(self.w12)
             if fan_in != 0:
                 bound = 1 / math.sqrt(fan_in)
-                init.uniform_(self.bias_t, -bound, bound)
+                init.uniform_(self.bias, -bound, bound)
 
     def forward(self, inputs):
-        # print(self.w1.shape, self.w2.shape, self.w3.shape)
-        out_channels = self.out_channels
-        in_channels = self.in_channels
+        w2 = self.w12[-self.out_channels:, :, :, :]
+        # w1 center是对w2进行pooling
+        w1_center = F.avg_pool2d(w2, kernel_size=(3, 3), stride=1)  # [256, 256, 3, 3]
+        # print("w2_center:", w2_center.shape)
+        w1 = self.w12[0:self.out_channels, :, :, :]
+        w1_p1 = w1[:, :, :1, :]
+        w1_p2 = w1[:, :, -1:, :]
+        w1_p3 = w1[:, :, 1:-1, :1]
+        w1_p4 = w1[:, :, 1:-1, -1:]
 
-        # init w2
-        self.w2 = []
-        k, l = 0, 0
-        w1_clip = self.w1[:, :, 1:-1, 1:-1].reshape(out_channels, in_channels, -1)
-        for i in range(self.kernel_size):
-            for j in range(self.kernel_size):
-                if j % 2 == 0 and i % 2 == 0:
-                    self.w2.append(w1_clip[:, :, l])
-                    l += 1
-                else:
-                    self.w2.append(self.w2_t[:, :, k])
-                    k += 1
-        self.w2 = torch.cat(self.w2, dim=-1).reshape(out_channels, in_channels, self.kernel_size, self.kernel_size)
+        w1_o1 = torch.cat([w1_p3, w1_center, w1_p4], dim=3)  # [256, 256, 3, 5]
+        # print("w2_o1.shape:", w2_o1.shape)
+        w1_o2 = torch.cat([w1_p1, w1_o1, w1_p2], dim=2)  # [256, 256, 5, 5]
+        # print("w2_o2.shape:", w2_o2.shape)
 
-        # init w3
-        self.w3 = []
-        k, l = 0, 0
-        w2_clip = self.w2[:, :, 1:-1, 1:-1].reshape(out_channels, in_channels, -1)
-        for i in range(self.kernel_size):
-            for j in range(self.kernel_size):
-                if j % 2 == 0 and i % 2 == 0:
-                    self.w3.append(w2_clip[:, :, l])
-                    l += 1
-                else:
-                    self.w3.append(self.w3_t[:, :, k])
-                    k += 1
-        self.w3 = torch.cat(self.w3, dim=-1).reshape(out_channels, in_channels, self.kernel_size, self.kernel_size)
+        w3_center_clip = w2[:, :, 1:-1, 1:-1]  # 3 x 3, [256, 256, 3, 3]
 
-        self.w = torch.cat([self.w1, self.w2, self.w3], dim=0)  # [3*out_channel, in_channel, kernel_size, kernel_size]
-        self.bias = torch.cat([self.bias_t, self.bias_t, self.bias_t], dim=0)
+        size = [self.kernel_size, self.kernel_size]
+        w3 = F.interpolate(w3_center_clip, mode="nearest", size=size) / 2e3  # [256, 256, 5, 5]
 
-        outputs = F.conv2d(inputs, self.w, bias=self.bias, stride=self.stride, padding=self.padding,
-                           dilation=self.dilation)
+        w = torch.cat([w1_o2, w2, w3], dim=0)
+        outputs = F.conv2d(inputs, w, bias=self.bias, stride=self.stride, padding=self.padding, dilation=self.dilation)
 
         outputs = F.normalize(outputs)
         o = F.relu(outputs)
 
-        return o, self.w
-
-
-if __name__ == "__main__":
-    net = FPNSE_Conv(32, 32, 5, 1)
-    # w = net.w
-    # w1 = w[0:32]
-    # w2 = w[32:64]
-    # w3 = w[64:]
-    # print(w1[0,0,1,1], w2[0,0,0,0])
-    # print(w2[0,0,1,1], w3[0,0,0,0])
-
-    inp = torch.randn([2, 32, 128, 128])
-    ref = torch.ones([2, 96, 124, 124])
-    opt = torch.optim.Adam(net.parameters(), lr=0.1)
-    for iter in range(100):
-        opt.zero_grad()
-        out, w = net(inp)
-        # print(out.shape)
-        loss = ((ref - out) ** 2).mean()
-        loss.backward()
-        opt.step()
-        print(loss.item())
-        w1 = w[0:32]
-        w2 = w[32:64]
-        w3 = w[64:]
-        print(w1[0, 0, 1, 1], w2[0, 0, 0, 0])
-        print(w2[0, 0, 1, 1], w3[0, 0, 0, 0])
+        return o, self.w12
