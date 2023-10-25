@@ -52,7 +52,7 @@ model = dict(
         ),
         bbox_head=dict(
             type='RotatedShared2FCBBoxHead',
-            in_channels=2048,
+            in_channels=4096,
             fc_out_channels=1024,
             roi_feat_size=7,
             num_classes=15,
@@ -123,8 +123,8 @@ test_pipeline = [
         ])
 ]
 data = dict(
-    samples_per_gpu=1,
-    workers_per_gpu=0,
+    samples_per_gpu=4,
+    workers_per_gpu=2,
     train=dict(
         type=dataset_type,
         ann_file=data_root + 'trainval/annfiles/',
