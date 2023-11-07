@@ -19,7 +19,7 @@ model = dict(
         style='pytorch',
         init_cfg=dict(type='Pretrained', checkpoint='torchvision://resnet50')),
     neck=dict(
-        type='MyNeck3',
+        type='MyNeck3WoRelu',
         in_channels=[256, 512, 1024, 2048],
         out_channels=256,
         start_level=1,
@@ -81,3 +81,5 @@ data = dict(
     test=dict(version=angle_version))
 
 find_unused_parameters=True
+
+resume_from='./work_dirs/rotated_fcos_r50_myneck3_1x_dota_le90-exp3/latest.pth'

@@ -45,14 +45,15 @@ model = dict(
         version=angle_version,
         bbox_roi_extractor=dict(
             type='SingleRoIExtractor',
-            roi_layer=dict(type='RoIAlign', output_size=14, sampling_ratio=0),
+            # roi_layer=dict(type='RoIAlign', output_size=14, sampling_ratio=0),
+            roi_layer=dict(type='RoIAlign', output_size=7, sampling_ratio=0),
             out_channels=1024,
             # featmap_strides=[4, 8, 16, 32]
             featmap_strides=[16]
         ),
         bbox_head=dict(
             type='RotatedShared2FCBBoxHead',
-            in_channels=4096,
+            in_channels=1024,
             fc_out_channels=1024,
             roi_feat_size=7,
             num_classes=15,
@@ -141,8 +142,11 @@ data = dict(
         img_prefix=data_root + 'test/images/',
         pipeline=test_pipeline))
 
+resume_from='./work_dirs/tridentnet_exp5/latest.pth'
+
+
 # CUDA_VISIBLE_DEVICES=0,1,2,3 OMP_NUM_THREADS=0 ./tools/dist_train.sh configs/myexps/tridentnet_exp5.py 4
 # CUDA_VISIBLE_DEVICES=3 OMP_NUM_THREADS=0 python ./tools/test.py configs/myexps/tridentnet_exp5.py ./work_dirs/tridentnet_exp5/epoch_12.pth --format-only --eval-options submission_dir=work_dirs/Task1_results_tridentnet_exp5_1024
 
-# CUDA_VISIBLE_DEVICES=5 OMP_NUM_THREADS=0 ./tools/dist_train.sh configs/myexps/tridentnet_exp5.py 1
+# CUDA_VISIBLE_DEVICES=1,2,3,5 OMP_NUM_THREADS=0 ./tools/dist_train.sh configs/myexps/tridentnet_exp5.py 4
 

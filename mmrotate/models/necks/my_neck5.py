@@ -5,23 +5,22 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from mmcv.cnn import ConvModule, xavier_init, build_activation_layer, build_norm_layer
+from mmcv.runner import BaseModule
+from torch.nn.modules.utils import _pair
 from torch.nn import init
 
 from ..builder import ROTATED_NECKS
 
 
 @ROTATED_NECKS.register_module()
-class MyNeck3WoRelu(nn.Module):
+class MyNeck5(nn.Module):
     """
-    等变卷积核大小 5 x 5
-    1 3 5
+    用空洞卷积
+    dilation=1, 2, 3
 
-    w1->w2：clip + 填补
-    w2->w3: clip + 填补
-
+    use cat instead of +
 
 
-    relu
     """
 
     def __init__(self,
@@ -38,7 +37,7 @@ class MyNeck3WoRelu(nn.Module):
                  norm_cfg=None,
                  act_cfg=None,
                  upsample_cfg=dict(mode='nearest')):
-        super(MyNeck3WoRelu, self).__init__()
+        super(MyNeck5, self).__init__()
         assert isinstance(in_channels, list)
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -76,6 +75,7 @@ class MyNeck3WoRelu(nn.Module):
         self.lateral_convs = nn.ModuleList()
         self.fpn_convs = nn.ModuleList()
         self.fpnse_convs = nn.ModuleList()
+        self.conv1x1s = nn.ModuleList()
 
         for i in range(self.start_level, self.backbone_end_level):
             l_conv = ConvModule(
@@ -97,8 +97,19 @@ class MyNeck3WoRelu(nn.Module):
                 inplace=False)
 
             # if i == 1:
-            fpnse_conv = FPNSE_Conv(out_channels, out_channels)
+            fpnse_conv = AtrousSE(out_channels, out_channels)
             self.fpnse_convs.append(fpnse_conv)
+
+            conv1x1 = ConvModule(
+                3  * out_channels,
+                out_channels,
+                1,
+                padding=0,
+                conv_cfg=conv_cfg,
+                norm_cfg=norm_cfg,
+                act_cfg=act_cfg,
+                inplace=False)
+            self.conv1x1s.append(conv1x1)
 
             self.lateral_convs.append(l_conv)
             self.fpn_convs.append(fpn_conv)
@@ -143,12 +154,6 @@ class MyNeck3WoRelu(nn.Module):
         # upsamples_results = [0] * 4
         # build top-down path
         used_backbone_levels = len(laterals)  # 4
-        for i in range(used_backbone_levels - 1, 0, -1):
-            prev_shape = laterals[i - 1].shape[2:]
-            # upsamples_results[i] = F.interpolate(
-            #     laterals[i], size=prev_shape, **self.upsample_cfg)
-            laterals[i - 1] += F.interpolate(
-                laterals[i], size=prev_shape, **self.upsample_cfg)
 
         outs = []
         # print("used_backbone_levels", used_backbone_levels)
@@ -157,16 +162,17 @@ class MyNeck3WoRelu(nn.Module):
             #     outs.append(self.fpn_convs[i](laterals[i]))
             #     continue
 
-            out, self.kernel_out = self.fpnse_convs[i](laterals[i])
-            channels = out.shape[1]
+            out = self.fpnse_convs[i](laterals[i])
+            out = self.conv1x1s[i](out)
+            outs.append(out)
 
-            out_fused = out[:, 0: self.out_channels, :, :]
-            j = self.out_channels
-            while j < channels:
-                out_fused = out_fused + out[:, j:j + self.out_channels, :, :]
-                j = j + self.out_channels
-            out_fused = out_fused / 3.0
-            outs.append(out_fused)
+        for i in range(used_backbone_levels - 1, 0, -1):
+            prev_shape = outs[i - 1].shape[2:]
+            # upsamples_results[i] = F.interpolate(
+            #     laterals[i], size=prev_shape, **self.upsample_cfg)
+            outs[i - 1] += F.interpolate(
+                outs[i], size=prev_shape, **self.upsample_cfg)
+
 
         # part 2: add extra levels
         if self.num_outs > len(outs):
@@ -194,26 +200,23 @@ class MyNeck3WoRelu(nn.Module):
         return tuple(outs)
 
 
-class FPNSE_Conv(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size=5, stride=1, padding=0, dilation=1,
+class AtrousSE(BaseModule):
+    def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, dilations=(1, 2, 3),
                  norm_cfg: Optional[Dict] = None,
                  act_cfg: Optional[Dict] = dict(type='ReLU')):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.stride = stride
-        self.padding = padding
-        self.dilation = dilation
+        self.stride = _pair(stride)
+        self.kernel_size = _pair(kernel_size)
+        self.paddings = _pair(dilations)
+        self.dilations = dilations
         self.kernel_size = kernel_size
-        self.w1 = nn.Parameter(torch.randn(out_channels, in_channels, self.kernel_size, self.kernel_size),
-                               requires_grad=True)
-        self.w2_t = nn.Parameter(
-            torch.randn(out_channels, in_channels, self.kernel_size ** 2 - (self.kernel_size // 2 + 1) ** 2),
-            requires_grad=True)
-        self.w3_t = nn.Parameter(
-            torch.randn(out_channels, in_channels, self.kernel_size ** 2 - (self.kernel_size // 2 + 1) ** 2),
-            requires_grad=True)
-        self.bias_t = nn.Parameter(torch.empty(out_channels), requires_grad=True)
+
+        self.weight = nn.Parameter(
+            torch.Tensor(out_channels, in_channels, *self.kernel_size))
+
+        self.bias = nn.Parameter(torch.Tensor(out_channels))
 
         self.reset_parameters()
 
@@ -229,63 +232,26 @@ class FPNSE_Conv(nn.Module):
         # Setting a=sqrt(5) in kaiming_uniform is the same as initializing with
         # uniform(-1/sqrt(k), 1/sqrt(k)), where k = weight.size(1) * prod(*kernel_size)
         # For more details see: https://github.com/pytorch/pytorch/issues/15314#issuecomment-477448573
-        init.kaiming_uniform_(self.w1, a=math.sqrt(5))
-        init.kaiming_uniform_(self.w2_t, a=math.sqrt(5))
-        init.kaiming_uniform_(self.w3_t, a=math.sqrt(5))
+        init.kaiming_uniform_(self.weight, a=math.sqrt(5))
 
-        if self.bias_t is not None:
-            fan_in, _ = init._calculate_fan_in_and_fan_out(self.w1)
+        if self.bias is not None:
+            fan_in, _ = init._calculate_fan_in_and_fan_out(self.weight)
             if fan_in != 0:
                 bound = 1 / math.sqrt(fan_in)
-                init.uniform_(self.bias_t, -bound, bound)
+                init.uniform_(self.bias, -bound, bound)
 
     def forward(self, inputs):
-        # print(self.w1.shape, self.w2.shape, self.w3.shape)
-        out_channels = self.out_channels
-        in_channels = self.in_channels
-
-        # init w2
-        self.w2 = []
-        k, l = 0, 0
-        w1_clip = self.w1[:, :, 1:-1, 1:-1].reshape(out_channels, in_channels, -1)
-        for i in range(self.kernel_size):
-            for j in range(self.kernel_size):
-                if j % 2 == 0 and i % 2 == 0:
-                    self.w2.append(w1_clip[:, :, l])
-                    l += 1
-                else:
-                    self.w2.append(self.w2_t[:, :, k])
-                    k += 1
-        self.w2 = torch.cat(self.w2, dim=-1).reshape(out_channels, in_channels, self.kernel_size, self.kernel_size)
-
-        # init w3
-        self.w3 = []
-        k, l = 0, 0
-        w2_clip = self.w2[:, :, 1:-1, 1:-1].reshape(out_channels, in_channels, -1)
-        for i in range(self.kernel_size):
-            for j in range(self.kernel_size):
-                if j % 2 == 0 and i % 2 == 0:
-                    self.w3.append(w2_clip[:, :, l])
-                    l += 1
-                else:
-                    self.w3.append(self.w3_t[:, :, k])
-                    k += 1
-        self.w3 = torch.cat(self.w3, dim=-1).reshape(out_channels, in_channels, self.kernel_size, self.kernel_size)
-
-        self.w = torch.cat([self.w1, self.w2, self.w3], dim=0)  # [3*out_channel, in_channel, kernel_size, kernel_size]
-        self.bias = torch.cat([self.bias_t, self.bias_t, self.bias_t], dim=0)
-
-        outputs = F.conv2d(inputs, self.w, bias=self.bias, stride=self.stride, padding=self.padding,
-                           dilation=self.dilation)
-
-        # outputs = F.normalize(outputs)
-        # o = F.relu(outputs)
-
-        return outputs, self.w
+        outputs = [
+            F.conv2d(input, self.weight, self.bias, self.stride, padding,
+                     dilation) for input, dilation, padding in zip(
+                inputs, self.dilations, self.paddings)
+        ]
+        o = torch.cat(outputs)
+        return o
 
 
 if __name__ == "__main__":
-    net = FPNSE_Conv(32, 32, 5, 1)
+    net = AtrousSE(32, 32, 3, 1)
     # w = net.w
     # w1 = w[0:32]
     # w2 = w[32:64]

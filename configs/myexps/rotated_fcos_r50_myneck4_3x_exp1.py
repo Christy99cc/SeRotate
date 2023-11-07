@@ -1,11 +1,7 @@
 _base_ = [
-    '../_base_/datasets/dotav1.py', '../_base_/schedules/schedule_1x.py',
+    '../_base_/datasets/dotav1bs4.py', '../_base_/schedules/schedule_3x.py',
     '../_base_/default_runtime.py'
 ]
-# dataset settings
-dataset_type = 'DOTADataset'
-# data_root = 'data/split_ss_dota1_0/'
-data_root = 'data/split_ss_1024_dota/'
 angle_version = 'le90'
 
 # model settings
@@ -23,14 +19,12 @@ model = dict(
         style='pytorch',
         init_cfg=dict(type='Pretrained', checkpoint='torchvision://resnet50')),
     neck=dict(
-        type='MyNeck1',
+        type='MyNeck4',
         in_channels=[256, 512, 1024, 2048],
         out_channels=256,
         start_level=1,
         add_extra_convs='on_output',  # use P5
         num_outs=5,
-        block_dilations=[8, 16],  # exp2
-        mid_channels=256,  # exp2
         relu_before_extra_convs=True),
     bbox_head=dict(
         type='RotatedFCOSHead',
@@ -81,41 +75,25 @@ train_pipeline = [
     dict(type='DefaultFormatBundle'),
     dict(type='Collect', keys=['img', 'gt_bboxes', 'gt_labels'])
 ]
-test_pipeline = [
-    dict(type='LoadImageFromFile'),
-    dict(
-        type='MultiScaleFlipAug',
-        img_scale=(1024, 1024),
-        flip=False,
-        transforms=[
-            dict(type='RResize'),
-            dict(type='Normalize', **img_norm_cfg),
-            dict(type='Pad', size_divisor=32),
-            dict(type='DefaultFormatBundle'),
-            dict(type='Collect', keys=['img'])
-        ])
-]
 data = dict(
-    samples_per_gpu=2,
-    workers_per_gpu=2,
-    train=dict(
-        type=dataset_type,
-        ann_file=data_root + 'trainval/annfiles/',
-        img_prefix=data_root + 'trainval/images/',
-        pipeline=train_pipeline),
-    val=dict(
-        type=dataset_type,
-        ann_file=data_root + 'val/annfiles/',
-        img_prefix=data_root + 'val/images/',
-        pipeline=test_pipeline),
-    test=dict(
-        type=dataset_type,
-        ann_file=data_root + 'test/images/',
-        img_prefix=data_root + 'test/images/',
-        pipeline=test_pipeline))
+    train=dict(pipeline=train_pipeline, version=angle_version),
+    val=dict(version=angle_version),
+    test=dict(version=angle_version))
+
+find_unused_parameters=True
 
 
-runner = dict(type='EpochBasedRunner', max_epochs=99999)
-evaluation = dict(interval=9999, metric='mAP')
-
-checkpoint_config = dict(interval=99999)
+# evaluation
+evaluation = dict(interval=6, metric='mAP')
+# optimizer
+optimizer = dict(type='SGD', lr=0.02, momentum=0.9, weight_decay=0.0001)
+optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
+# learning policy
+lr_config = dict(
+    policy='step',
+    warmup='linear',
+    warmup_iters=500,
+    warmup_ratio=1.0 / 3,
+    step=[24, 33])
+runner = dict(type='EpochBasedRunner', max_epochs=36)
+checkpoint_config = dict(interval=6)

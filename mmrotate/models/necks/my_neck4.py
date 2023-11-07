@@ -11,7 +11,7 @@ from ..builder import ROTATED_NECKS
 
 
 @ROTATED_NECKS.register_module()
-class MyNeck3WoRelu(nn.Module):
+class MyNeck4(nn.Module):
     """
     等变卷积核大小 5 x 5
     1 3 5
@@ -19,9 +19,8 @@ class MyNeck3WoRelu(nn.Module):
     w1->w2：clip + 填补
     w2->w3: clip + 填补
 
+    use cat instead of +
 
-
-    relu
     """
 
     def __init__(self,
@@ -38,7 +37,7 @@ class MyNeck3WoRelu(nn.Module):
                  norm_cfg=None,
                  act_cfg=None,
                  upsample_cfg=dict(mode='nearest')):
-        super(MyNeck3WoRelu, self).__init__()
+        super(MyNeck4, self).__init__()
         assert isinstance(in_channels, list)
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -76,6 +75,7 @@ class MyNeck3WoRelu(nn.Module):
         self.lateral_convs = nn.ModuleList()
         self.fpn_convs = nn.ModuleList()
         self.fpnse_convs = nn.ModuleList()
+        self.conv1x1s = nn.ModuleList()
 
         for i in range(self.start_level, self.backbone_end_level):
             l_conv = ConvModule(
@@ -95,13 +95,15 @@ class MyNeck3WoRelu(nn.Module):
                 norm_cfg=norm_cfg,
                 act_cfg=act_cfg,
                 inplace=False)
-
             # if i == 1:
             fpnse_conv = FPNSE_Conv(out_channels, out_channels)
-            self.fpnse_convs.append(fpnse_conv)
 
+            conv1x1 = ConvModule(3 * out_channels, out_channels, 1, inplace=False, bias=False)
+
+            self.fpnse_convs.append(fpnse_conv)
             self.lateral_convs.append(l_conv)
             self.fpn_convs.append(fpn_conv)
+            self.conv1x1s.append(conv1x1)
 
         # add extra conv layers (e.g., RetinaNet)
         extra_levels = num_outs - self.backbone_end_level + self.start_level  # extra_levels = 1
@@ -140,17 +142,9 @@ class MyNeck3WoRelu(nn.Module):
             for i, lateral_conv in enumerate(self.lateral_convs)
         ]
 
-        # upsamples_results = [0] * 4
-        # build top-down path
         used_backbone_levels = len(laterals)  # 4
-        for i in range(used_backbone_levels - 1, 0, -1):
-            prev_shape = laterals[i - 1].shape[2:]
-            # upsamples_results[i] = F.interpolate(
-            #     laterals[i], size=prev_shape, **self.upsample_cfg)
-            laterals[i - 1] += F.interpolate(
-                laterals[i], size=prev_shape, **self.upsample_cfg)
 
-        outs = []
+        cat_outs = []
         # print("used_backbone_levels", used_backbone_levels)
         for i in range(used_backbone_levels):
             # if i > 0:
@@ -158,15 +152,23 @@ class MyNeck3WoRelu(nn.Module):
             #     continue
 
             out, self.kernel_out = self.fpnse_convs[i](laterals[i])
-            channels = out.shape[1]
+            cat_out = torch.cat([out[:, :self.out_channels, :, :], out[:, self.out_channels:-self.out_channels, :, :],
+                                 out[:, -self.out_channels:, :, :]], dim=1)
+            cat_outs.append(cat_out)
 
-            out_fused = out[:, 0: self.out_channels, :, :]
-            j = self.out_channels
-            while j < channels:
-                out_fused = out_fused + out[:, j:j + self.out_channels, :, :]
-                j = j + self.out_channels
-            out_fused = out_fused / 3.0
-            outs.append(out_fused)
+        # upsamples_results = [0] * 4
+        # build top-down path
+        for i in range(used_backbone_levels - 1, 0, -1):
+            prev_shape = cat_outs[i - 1].shape[2:]
+            # upsamples_results[i] = F.interpolate(
+            #     laterals[i], size=prev_shape, **self.upsample_cfg)
+            cat_outs[i - 1] += F.interpolate(
+                cat_outs[i], size=prev_shape, **self.upsample_cfg)
+
+        outs = [
+            self.conv1x1s[i](cat_outs[i]) for i in range(used_backbone_levels)
+        ]
+
 
         # part 2: add extra levels
         if self.num_outs > len(outs):
@@ -279,7 +281,7 @@ class FPNSE_Conv(nn.Module):
                            dilation=self.dilation)
 
         # outputs = F.normalize(outputs)
-        # o = F.relu(outputs)
+        # outputs = F.relu(outputs)
 
         return outputs, self.w
 
