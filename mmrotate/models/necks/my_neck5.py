@@ -207,11 +207,10 @@ class AtrousSE(BaseModule):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.stride = _pair(stride)
+        self.stride = stride
         self.kernel_size = _pair(kernel_size)
         self.paddings = _pair(dilations)
         self.dilations = dilations
-        self.kernel_size = kernel_size
 
         self.weight = nn.Parameter(
             torch.Tensor(out_channels, in_channels, *self.kernel_size))
@@ -242,11 +241,11 @@ class AtrousSE(BaseModule):
 
     def forward(self, inputs):
         outputs = [
-            F.conv2d(input, self.weight, self.bias, self.stride, padding,
-                     dilation) for input, dilation, padding in zip(
-                inputs, self.dilations, self.paddings)
+            F.conv2d(inputs, self.weight, self.bias, self.stride, padding,
+                     dilation) for dilation, padding in zip(
+                self.dilations, self.paddings)
         ]
-        o = torch.cat(outputs)
+        o = torch.cat(outputs, dim=1)
         return o
 
 
