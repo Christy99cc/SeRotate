@@ -1,16 +1,58 @@
 {
-    "version": "0.2.0",
-    "configurations": [
-      {
-        "name": "test",
-        "type": "python",
-        "request": "launch",
-        "program": "${workspaceFolder}/tools/train.py",
-        "console": "integratedTerminal",
-        "args": [
-          "config=configs/myexps/tridentnet_exp1.py",
-          "gpus=1"
-        ]
-      }
-    ]
-  }
+  "configurations": [
+    {
+      "name": "test",
+      "type": "python",
+      "request": "launch",
+      "env": {
+        "PYTHONPATH": "${workspaceRoot}",
+        "CUDA_VISIBLE_DEVICES": "1"
+      },
+      "envFile": "${workspaceRoot}/.env",
+      "program": "${workspaceFolder}/tools/train.py",
+      "console": "integratedTerminal",
+      "args": [
+        "configs/myexps/faster_myneck5_1x.py",
+        "--gpus=1"
+      ],
+      "justMyCode": false
+    },
+    {
+      "name": "test2",
+      "type": "python",
+      "request": "launch",
+      "env": {
+        "PYTHONPATH": "${workspaceRoot}",
+        "CUDA_VISIBLE_DEVICES": "1"
+      },
+      "envFile": "${workspaceRoot}/.env",
+      "program": "${workspaceFolder}/tools/cc/feature.py",
+      "console": "integratedTerminal",
+      "args": [
+        "/home/zsx/workzsx/all_data/dota/MyTest/test-split/images/P0181__1024__0___0.png",
+        "configs/myexps/faster_myneck5_1x.py",
+        "MyTest/epoch_12.pth",
+        "--out-file=MyTest/out1115.jpg"
+      ],
+      "justMyCode": false
+    },
+    {
+      "name": "test3",
+      "type": "python",
+      "request": "launch",
+      "env": {
+        "PYTHONPATH": "${workspaceRoot}",
+        "CUDA_VISIBLE_DEVICES": "1"
+      },
+      "envFile": "${workspaceRoot}/.env",
+      "program": "${workspaceFolder}/demo/huge_image_demo.py",
+      "console": "integratedTerminal",
+      "args": [
+        "/home/zsx/workzsx/all_data/dota/MyTest/test/P0181.png",
+        "configs/myexps/faster_myneck5_1x.py",
+        "MyTest/epoch_12.pth"
+      ],
+      "justMyCode": false
+    }
+  ]
+}

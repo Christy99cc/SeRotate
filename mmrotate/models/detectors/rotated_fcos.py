@@ -1,10 +1,11 @@
 # Copyright (c) OpenMMLab. All rights reserved.
+from .single_stage_hmap import RotatedSingleStageDetectorHMap
 from ..builder import ROTATED_DETECTORS
 from .single_stage import RotatedSingleStageDetector
 
 
 @ROTATED_DETECTORS.register_module()
-class RotatedFCOS(RotatedSingleStageDetector):
+class RotatedFCOS(RotatedSingleStageDetectorHMap):
     """Implementation of Rotated `FCOS.`__
 
     __ https://arxiv.org/abs/1904.01355

@@ -1,35 +1,45 @@
 # Copyright (c) OpenMMLab. All rights reserved.
-import argparse
-import copy
-import os
-import os.path as osp
-import time
-import warnings
+from argparse import ArgumentParser
 
-import mmcv
-import torch
-import torch.distributed as dist
-from mmcv import Config, DictAction
-from mmcv.runner import get_dist_info, init_dist
-from mmcv.utils import get_git_hash
-from mmdet import __version__
-from mmdet.apis import init_random_seed, set_random_seed
+from mmdet.apis import inference_detector, init_detector, show_result_pyplot
 
-from mmrotate.apis import train_detector
-from mmrotate.datasets import build_dataset
-from mmrotate.models import build_detector
-from mmrotate.utils import (collect_env, get_device, get_root_logger,
-                            setup_multi_processes)
-from mmrotate.models.necks import fpn_se48_s
+import mmrotate  # noqa: F401
 
 
-def main():
-    img = 'xxx'
-    covnet = fpn_se48_s.FPNSE_Conv(in_channels=256, out_channels=256)
-    feature, w12 = covnet(img)
-#   plot feature
+def parse_args():
+    parser = ArgumentParser()
+    parser.add_argument('img', help='Image file')
+    parser.add_argument('config', help='Config file')
+    parser.add_argument('checkpoint', help='Checkpoint file')
+    parser.add_argument('--out-file', default=None, help='Path to output file')
+    parser.add_argument(
+        '--device', default='cuda:0', help='Device used for inference')
+    parser.add_argument(
+        '--palette',
+        default='dota',
+        choices=['dota', 'sar', 'hrsc', 'hrsc_classwise', 'random'],
+        help='Color palette used for visualization')
+    parser.add_argument(
+        '--score-thr', type=float, default=0.3, help='bbox score threshold')
+    args = parser.parse_args()
+    return args
 
+
+def main(args):
+    # build the model from a config file and a checkpoint file
+    model = init_detector(args.config, args.checkpoint, device=args.device)
+    # test a single image
+    result = inference_detector(model, args.img)
+    # show the results
+    show_result_pyplot(
+        model,
+        args.img,
+        result,
+        palette=args.palette,
+        score_thr=args.score_thr,
+        out_file=args.out_file)
 
 
 if __name__ == '__main__':
-    main()
+    args = parse_args()
+    main(args)
