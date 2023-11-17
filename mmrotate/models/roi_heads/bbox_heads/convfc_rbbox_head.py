@@ -6,7 +6,7 @@ from mmcv.runner import force_fp32
 from mmdet.models.losses import accuracy
 from mmdet.models.utils import build_linear_layer
 
-from ...builder import ROTATED_HEADS
+from ...builder import ROTATED_HEADS, build_loss
 from .rotated_bbox_head import RotatedBBoxHead
 
 
@@ -106,7 +106,7 @@ class RotatedConvFCBBoxHead(RotatedBBoxHead):
                 out_features=cls_channels)
         if self.with_reg:
             out_dim_reg = (5 if self.reg_class_agnostic else 5 *
-                           self.num_classes)
+                                                             self.num_classes)
             self.fc_reg = build_linear_layer(
                 self.reg_predictor_cfg,
                 in_features=self.reg_last_dim,
@@ -155,7 +155,7 @@ class RotatedConvFCBBoxHead(RotatedBBoxHead):
             # for shared branch, only consider self.with_avg_pool
             # for separated branches, also consider self.num_shared_fcs
             if (is_shared
-                    or self.num_shared_fcs == 0) and not self.with_avg_pool:
+                or self.num_shared_fcs == 0) and not self.with_avg_pool:
                 last_layer_dim *= self.roi_feat_area
             for i in range(num_branch_fcs):
                 fc_in_channels = (
@@ -221,6 +221,91 @@ class RotatedShared2FCBBoxHead(RotatedConvFCBBoxHead):
             fc_out_channels=fc_out_channels,
             *args,
             **kwargs)
+
+
+@ROTATED_HEADS.register_module()
+class RotatedShared2FCBBoxHead_CosLoss1(RotatedConvFCBBoxHead):
+    def __init__(self, fc_out_channels=1024,
+                 loss_angle=dict(type='CosLoss1', loss_weight=1.0),
+                 *args, **kwargs):
+        super(RotatedShared2FCBBoxHead_CosLoss1, self).__init__(
+            num_shared_convs=0,
+            num_shared_fcs=2,
+            num_cls_convs=0,
+            num_cls_fcs=0,
+            num_reg_convs=0,
+            num_reg_fcs=0,
+            fc_out_channels=fc_out_channels,
+            *args,
+            **kwargs)
+        self.loss_angle = build_loss(loss_angle)
+
+    def loss(self,
+             cls_score,
+             bbox_pred,
+             rois,
+             labels,
+             label_weights,
+             bbox_targets,
+             bbox_weights,
+             reduction_override=None):
+        losses = dict()
+        if cls_score is not None:
+            avg_factor = max(torch.sum(label_weights > 0).float().item(), 1.)
+            if cls_score.numel() > 0:
+                loss_cls_ = self.loss_cls(
+                    cls_score,
+                    labels,
+                    label_weights,
+                    avg_factor=avg_factor,
+                    reduction_override=reduction_override)
+                if isinstance(loss_cls_, dict):
+                    losses.update(loss_cls_)
+                else:
+                    losses['loss_cls'] = loss_cls_
+                if self.custom_activation:
+                    acc_ = self.loss_cls.get_accuracy(cls_score, labels)
+                    losses.update(acc_)
+                else:
+                    losses['acc'] = accuracy(cls_score, labels)
+        if bbox_pred is not None:
+            bg_class_ind = self.num_classes
+            # 0~self.num_classes-1 are FG, self.num_classes is BG
+            pos_inds = (labels >= 0) & (labels < bg_class_ind)
+            # do not perform bounding box regression for BG anymore.
+            if pos_inds.any():
+                if self.reg_decoded_bbox:
+                    # When the regression loss (e.g. `IouLoss`,
+                    # `GIouLoss`, `DIouLoss`) is applied directly on
+                    # the decoded bounding boxes, it decodes the
+                    # already encoded coordinates to absolute format.
+                    bbox_pred = self.bbox_coder.decode(rois[:, 1:], bbox_pred)
+                if self.reg_class_agnostic:
+                    pos_bbox_pred = bbox_pred.view(
+                        bbox_pred.size(0), 5)[pos_inds.type(torch.bool)]
+                else:
+                    pos_bbox_pred = bbox_pred.view(
+                        bbox_pred.size(0), -1,
+                        5)[pos_inds.type(torch.bool),
+                           labels[pos_inds.type(torch.bool)]]
+
+                # 屏蔽回归分支的最后一维（角度）
+                bbox_weights[:, -1] = 0
+                losses['loss_bbox'] = self.loss_bbox(
+                    pos_bbox_pred,
+                    bbox_targets[pos_inds.type(torch.bool)],
+                    bbox_weights[pos_inds.type(torch.bool)],
+                    avg_factor=bbox_targets.size(0),
+                    reduction_override=reduction_override)
+
+                losses['loss_angle'] = self.loss_angle(
+                    pos_bbox_pred[:, -1],
+                    bbox_targets[pos_inds.type(torch.bool)][:, -1],
+                )
+            else:
+                losses['loss_bbox'] = bbox_pred[pos_inds].sum()
+                losses['loss_angle'] = bbox_pred[pos_inds].sum()
+        return losses
 
 
 @ROTATED_HEADS.register_module()
