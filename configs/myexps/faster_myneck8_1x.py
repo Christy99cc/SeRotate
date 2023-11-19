@@ -17,7 +17,7 @@ model = dict(
         style='pytorch',
         init_cfg=dict(type='Pretrained', checkpoint='torchvision://resnet50')),
     neck=dict(
-        type='MyNeck6',
+        type='MyNeck7',
         in_channels=[256, 512, 1024, 2048],
         out_channels=256,
         num_outs=5),
@@ -143,5 +143,5 @@ evaluation = dict(interval=12, metric='mAP')
 # find_unused_parameters=True
 
 
-# OMP_NUM_THREADS=0 ./tools/dist_train.sh configs/myexps/faster_myneck6_1x.py 1
-# CUDA_VISIBLE_DEVICES=0 OMP_NUM_THREADS=0 python ./tools/test.py configs/myexps/faster_myneck6_1x.py ./work_dirs/faster_myneck6_1x/epoch_12.pth --format-only --eval-options submission_dir=work_dirs/Task1_results_faster_myneck6_1x_1118
+# OMP_NUM_THREADS=0 ./tools/dist_train.sh configs/myexps/faster_myneck7_1x.py 1
+# CUDA_VISIBLE_DEVICES=0 OMP_NUM_THREADS=0 python ./tools/test.py configs/myexps/faster_myneck7_1x.py ./work_dirs/faster_myneck7_1x/epoch_12.pth --format-only --eval-options submission_dir=work_dirs/Task1_results_faster_myneck7_1x_1119
