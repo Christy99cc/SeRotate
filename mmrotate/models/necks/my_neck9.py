@@ -13,9 +13,11 @@ from ..builder import ROTATED_NECKS
 
 
 @ROTATED_NECKS.register_module()
-class MyNeck8(nn.Module):
+class MyNeck9(nn.Module):
     """
     去掉short-connection
+
+    只用一层dilation
 
     适用于fasterrcnn
     暂不适用于RetinaNet
@@ -36,7 +38,7 @@ class MyNeck8(nn.Module):
                  norm_cfg=None,
                  act_cfg=None,
                  upsample_cfg=dict(mode='nearest')):
-        super(MyNeck8, self).__init__()
+        super(MyNeck7, self).__init__()
         assert isinstance(in_channels, list)
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -73,7 +75,7 @@ class MyNeck8(nn.Module):
 
         self.lateral_convs = nn.ModuleList()
         # self.conv1x1s = nn.ModuleList()
-        self.se_conv2s = nn.ModuleList()
+        # self.se_conv2s = nn.ModuleList()
 
         for i in range(self.start_level, self.backbone_end_level):
             l_conv = ConvModule(
@@ -98,14 +100,14 @@ class MyNeck8(nn.Module):
             #
             # self.conv1x1s.append(conv1x1)
 
-            if i < 2:
-                if i == 1:
-                    se_conv2 = AtrousSEV2(in_channels=out_channels, out_channels=out_channels,
-                                          strides=(1, 2, 2, 4), dilations=(1, 2, 4, 8))
-                if i == 2:
-                    se_conv2 = AtrousSEV2(in_channels=out_channels, out_channels=out_channels,
-                                          strides=(1, 1, 2, 2), dilations=(1, 2, 4, 8))
-                self.se_conv2s.append(se_conv2)
+            # if i < 2:
+            #     if i == 1:
+            #         se_conv2 = AtrousSEV2(in_channels=out_channels, out_channels=out_channels,
+            #                               strides=(1, 2, 2, 4), dilations=(1, 2, 4, 8))
+            #     if i == 2:
+            #         se_conv2 = AtrousSEV2(in_channels=out_channels, out_channels=out_channels,
+            #                               strides=(1, 1, 2, 2), dilations=(1, 2, 4, 8))
+            #     self.se_conv2s.append(se_conv2)
 
         self.fpn_conv = ConvModule(
             out_channels,
@@ -184,10 +186,7 @@ class MyNeck8(nn.Module):
         #
         # outs_1x1s = [self.conv1x1s[i](cat_outs[i]) for i in range(len(cat_outs))]
 
-        outs = []
-        for i in range(len(self.se_conv2s)):
-            outs = self.se_conv2s[i](se_outs)
-            se_outs = outs
+        outs = se_outs
 
         # # part 1: from original levels
         # outs = [
