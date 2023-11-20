@@ -38,7 +38,7 @@ class MyNeck9(nn.Module):
                  norm_cfg=None,
                  act_cfg=None,
                  upsample_cfg=dict(mode='nearest')):
-        super(MyNeck7, self).__init__()
+        super(MyNeck9, self).__init__()
         assert isinstance(in_channels, list)
         self.in_channels = in_channels
         self.out_channels = out_channels
