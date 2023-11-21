@@ -5,7 +5,7 @@ _base_ = [
 
 angle_version = 'le90'
 model = dict(
-    type='RotatedFasterRCNN',
+    type='OrientedRCNN',
     backbone=dict(
         type='ResNet',
         depth=50,
@@ -17,12 +17,12 @@ model = dict(
         style='pytorch',
         init_cfg=dict(type='Pretrained', checkpoint='torchvision://resnet50')),
     neck=dict(
-        type='FPN',
+        type='MyNeck8',
         in_channels=[256, 512, 1024, 2048],
         out_channels=256,
         num_outs=5),
     rpn_head=dict(
-        type='RotatedRPNHead',
+        type='OrientedRPNHead',
         in_channels=256,
         feat_channels=256,
         version=angle_version,
@@ -32,19 +32,23 @@ model = dict(
             ratios=[0.5, 1.0, 2.0],
             strides=[4, 8, 16, 32, 64]),
         bbox_coder=dict(
-            type='DeltaXYWHBBoxCoder',
-            target_means=[0.0, 0.0, 0.0, 0.0],
-            target_stds=[1.0, 1.0, 1.0, 1.0]),
+            type='MidpointOffsetCoder',
+            angle_range=angle_version,
+            target_means=[0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            target_stds=[1.0, 1.0, 1.0, 1.0, 0.5, 0.5]),
         loss_cls=dict(
             type='CrossEntropyLoss', use_sigmoid=True, loss_weight=1.0),
         loss_bbox=dict(
             type='SmoothL1Loss', beta=0.1111111111111111, loss_weight=1.0)),
     roi_head=dict(
-        type='RotatedStandardRoIHead',
-        version=angle_version,
+        type='OrientedStandardRoIHead',
         bbox_roi_extractor=dict(
-            type='SingleRoIExtractor',
-            roi_layer=dict(type='RoIAlign', output_size=7, sampling_ratio=0),
+            type='RotatedSingleRoIExtractor',
+            roi_layer=dict(
+                type='RoIAlignRotated',
+                out_size=7,
+                sample_num=2,
+                clockwise=True),
             out_channels=256,
             featmap_strides=[4, 8, 16, 32]),
         bbox_head=dict(
@@ -54,10 +58,11 @@ model = dict(
             roi_feat_size=7,
             num_classes=15,
             bbox_coder=dict(
-                type='DeltaXYWHAHBBoxCoder',
+                type='DeltaXYWHAOBBoxCoder',
                 angle_range=angle_version,
-                norm_factor=2,
+                norm_factor=None,
                 edge_swap=True,
+                proj_xy=True,
                 target_means=(.0, .0, .0, .0, .0),
                 target_stds=(0.1, 0.1, 0.2, 0.2, 0.1)),
             reg_class_agnostic=True,
@@ -85,7 +90,7 @@ model = dict(
         rpn_proposal=dict(
             nms_pre=2000,
             max_per_img=2000,
-            nms=dict(type='nms', iou_threshold=0.7),
+            nms=dict(type='nms', iou_threshold=0.8),
             min_bbox_size=0),
         rcnn=dict(
             assigner=dict(
@@ -94,9 +99,10 @@ model = dict(
                 neg_iou_thr=0.5,
                 min_pos_iou=0.5,
                 match_low_quality=False,
+                iou_calculator=dict(type='RBboxOverlaps2D'),
                 ignore_iof_thr=-1),
             sampler=dict(
-                type='RandomSampler',
+                type='RRandomSampler',
                 num=512,
                 pos_fraction=0.25,
                 neg_pos_ub=-1,
@@ -107,7 +113,7 @@ model = dict(
         rpn=dict(
             nms_pre=2000,
             max_per_img=2000,
-            nms=dict(type='nms', iou_threshold=0.7),
+            nms=dict(type='nms', iou_threshold=0.8),
             min_bbox_size=0),
         rcnn=dict(
             nms_pre=2000,
@@ -138,4 +144,8 @@ data = dict(
     test=dict(version=angle_version))
 
 optimizer = dict(lr=0.005)
-evaluation = dict(interval=12, metric='mAP')
+
+find_unused_parameters=True
+
+# OMP_NUM_THREADS=0 ./tools/dist_train.sh configs/myexps/oriented_rcnn_myneck8_1x.py 1
+# # CUDA_VISIBLE_DEVICES=1 OMP_NUM_THREADS=0 python ./tools/test.py configs/myexps/oriented_rcnn_myneck8_1x.py ./work_dirs/oriented_rcnn_myneck8_1x/epoch_12.pth --format-only --eval-options submission_dir=work_dirs/Task1_results_oriented_rcnn_myneck8_1x_1122
