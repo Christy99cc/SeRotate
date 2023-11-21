@@ -129,3 +129,5 @@ tonas.sh
 toss.sh
 /MyTest/P0181.png
 /MyTest/epoch_12.pth
+
+demo/MMRotate_Tutorial.ipynb

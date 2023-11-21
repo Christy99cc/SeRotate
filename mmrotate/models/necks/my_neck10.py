@@ -13,11 +13,11 @@ from ..builder import ROTATED_NECKS
 
 
 @ROTATED_NECKS.register_module()
-class MyNeck9(nn.Module):
+class MyNeck10(nn.Module):
     """
     去掉short-connection
 
-    只用一层dilation
+    只用一层dilation + 2个shared3x3
 
     适用于fasterrcnn
     暂不适用于RetinaNet
@@ -38,7 +38,7 @@ class MyNeck9(nn.Module):
                  norm_cfg=None,
                  act_cfg=None,
                  upsample_cfg=dict(mode='nearest')):
-        super(MyNeck9, self).__init__()
+        super(MyNeck10, self).__init__()
         assert isinstance(in_channels, list)
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -120,7 +120,7 @@ class MyNeck9(nn.Module):
             inplace=False)
 
         self.se_conv = AtrousSE(in_channels=out_channels, out_channels=out_channels,
-                                strides=(1, 2, 4, 8), dilations=(1, 2, 4, 8))
+                                strides=(1, 1, 1, 1), dilations=(1, 2, 4, 8))
 
         # add extra conv layers (e.g., RetinaNet)
         # extra_levels = num_outs - self.backbone_end_level + self.start_level  # extra_levels = 1
