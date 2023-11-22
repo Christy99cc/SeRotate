@@ -99,13 +99,14 @@ class MyNeck8(nn.Module):
             # self.conv1x1s.append(conv1x1)
 
             if i < 2:
-                # if i == 1:
-                se_conv2 = AtrousSEV2(in_channels=out_channels, out_channels=out_channels,
+                if i == 1:
+                    se_conv2 = AtrousSEV2(in_channels=out_channels, out_channels=out_channels,
                                       strides=(1, 2, 2, 4), dilations=(1, 2, 4, 8))
+                    self.se_conv2s.append(se_conv2)
                 if i == 2:
                     se_conv2 = AtrousSEV2(in_channels=out_channels, out_channels=out_channels,
                                           strides=(1, 1, 2, 2), dilations=(1, 2, 4, 8))
-                self.se_conv2s.append(se_conv2)
+                    self.se_conv2s.append(se_conv2)
 
         self.fpn_conv = ConvModule(
             out_channels,
