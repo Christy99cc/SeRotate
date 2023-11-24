@@ -13,10 +13,12 @@ from ..builder import ROTATED_NECKS
 
 
 @ROTATED_NECKS.register_module()
-class MyNeck8(nn.Module):
+class MyNeck11(nn.Module):
     """
     去掉short-connection
-    2层dilation
+
+    融合时用dilation增强
+    等变 只用一层dilation
 
     适用于fasterrcnn
     暂不适用于RetinaNet
@@ -37,7 +39,7 @@ class MyNeck8(nn.Module):
                  norm_cfg=None,
                  act_cfg=None,
                  upsample_cfg=dict(mode='nearest')):
-        super(MyNeck8, self).__init__()
+        super(MyNeck11, self).__init__()
         assert isinstance(in_channels, list)
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -73,8 +75,9 @@ class MyNeck8(nn.Module):
                 self.add_extra_convs = 'on_output'
 
         self.lateral_convs = nn.ModuleList()
-        # self.conv1x1s = nn.ModuleList()
-        self.se_conv2s = nn.ModuleList()
+
+        self.fpnse_convs = nn.ModuleList()
+        self.conv1x1s = nn.ModuleList()
 
         for i in range(self.start_level, self.backbone_end_level):
             l_conv = ConvModule(
@@ -87,27 +90,19 @@ class MyNeck8(nn.Module):
                 inplace=False)
             self.lateral_convs.append(l_conv)
 
-            # conv1x1 = ConvModule(
-            #     in_channels[i] + out_channels,
-            #     out_channels,
-            #     1,
-            #     padding=0,
-            #     conv_cfg=conv_cfg,
-            #     norm_cfg=norm_cfg,
-            #     act_cfg=act_cfg,
-            #     inplace=False)
-            #
-            # self.conv1x1s.append(conv1x1)
+            fpnse_conv = AtrousSE(out_channels, out_channels)
+            self.fpnse_convs.append(fpnse_conv)
 
-            if i < 2:
-                if i == 1:
-                    se_conv2 = AtrousSEV2(in_channels=out_channels, out_channels=out_channels,
-                                      strides=(1, 2, 2, 4), dilations=(1, 2, 4, 8))
-                    self.se_conv2s.append(se_conv2)
-                if i == 2:
-                    se_conv2 = AtrousSEV2(in_channels=out_channels, out_channels=out_channels,
-                                          strides=(1, 1, 2, 2), dilations=(1, 2, 4, 8))
-                    self.se_conv2s.append(se_conv2)
+            conv1x1 = ConvModule(
+                3 * out_channels,
+                out_channels,
+                1,
+                padding=0,
+                conv_cfg=conv_cfg,
+                norm_cfg=norm_cfg,
+                act_cfg=act_cfg,
+                inplace=False)
+            self.conv1x1s.append(conv1x1)
 
         self.fpn_conv = ConvModule(
             out_channels,
@@ -120,7 +115,7 @@ class MyNeck8(nn.Module):
             inplace=False)
 
         self.se_conv = AtrousSE(in_channels=out_channels, out_channels=out_channels,
-                                strides=(1, 1, 1, 1), dilations=(1, 2, 4, 8))
+                                strides=(1, 2, 4, 8), dilations=(1, 2, 4, 8))
 
         # add extra conv layers (e.g., RetinaNet)
         # extra_levels = num_outs - self.backbone_end_level + self.start_level  # extra_levels = 1
@@ -163,16 +158,23 @@ class MyNeck8(nn.Module):
         # build top-down path
         used_backbone_levels = len(laterals)  # 4
 
+        outs1 = []
+        for i in range(used_backbone_levels):
+            out = self.fpnse_convs[i](laterals[i])
+            o = torch.cat(out, dim=1)
+            o = self.conv1x1s[i](o)
+            outs1.append(o)
+
         for i in range(used_backbone_levels - 1, 0, -1):
-            prev_shape = laterals[i - 1].shape[2:]
+            prev_shape = outs1[i - 1].shape[2:]
             # upsamples_results[i] = F.interpolate(
             #     laterals[i], size=prev_shape, **self.upsample_cfg)
-            laterals[i - 1] += F.interpolate(
-                laterals[i], size=prev_shape, **self.upsample_cfg)
+            outs1[i - 1] += F.interpolate(
+                outs1[i], size=prev_shape, **self.upsample_cfg)
 
         # P2 作为融合的特征
         # 对P2做尺度等变，然后再加回原PFN出的结果上
-        p2 = self.fpn_conv(laterals[0])
+        p2 = self.fpn_conv(outs1[0])
         se_outs = self.se_conv(p2)
         # len(outs) = 4
         # torch.Size([2, 256, 256, 256])
@@ -186,10 +188,7 @@ class MyNeck8(nn.Module):
         #
         # outs_1x1s = [self.conv1x1s[i](cat_outs[i]) for i in range(len(cat_outs))]
 
-        outs = []
-        for i in range(len(self.se_conv2s)):
-            outs = self.se_conv2s[i](se_outs)
-            se_outs = outs
+        outs = se_outs
 
         # # part 1: from original levels
         # outs = [
