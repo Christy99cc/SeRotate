@@ -223,10 +223,10 @@ class AtrousSE(BaseModule):
 
         # attention
         d = max(int(out_channels / r), L)
-        self.M = M
+        self.M = len(self.dilations)
         self.fc = nn.Linear(out_channels, d)
         self.fcs = nn.ModuleList([])
-        for i in range(M):
+        for i in range(self.M):
             self.fcs.append(nn.Linear(d, out_channels))
         self.softmax = nn.Softmax(dim=1)
 
@@ -257,31 +257,34 @@ class AtrousSE(BaseModule):
             F.conv2d(inputs, self.weight, self.bias, stride, padding,
                      dilation) for stride, dilation, padding in zip(
                 self.strides, self.dilations, self.paddings)
-        ]
+        ]  # [2, 256, 256, 256]
         for i, out in enumerate(outputs):
-            fea = out.unsqueeze_(dim=1)
+            fea = out.unsqueeze_(dim=1)  # [2, 1, 256, 256, 256]
             if i == 0:
                 feas = fea
             else:
-                feas = torch.cat([feas, fea], dim=1)
+                feas = torch.cat([feas, fea], dim=1) # # [2, 3, 256, 256, 256]
 
-        fea_U = torch.sum(feas, dim=1)
-        fea_s = fea_U.mean(-1).mean(-1)
-        fea_z = self.fc(fea_s)
+        fea_U = torch.sum(feas, dim=1) # torch.Size([2, 256, 256, 256])
+        fea_s = fea_U.mean(-1).mean(-1) # [2, 256]
+        fea_z = self.fc(fea_s) # [2, 128]
         for i, fc in enumerate(self.fcs):
-            print(i, fea_z.shape)
             vector = fc(fea_z).unsqueeze_(dim=1)
-            print(i, vector.shape)
             if i == 0:
                 attention_vectors = vector
             else:
                 attention_vectors = torch.cat([attention_vectors, vector],
                                               dim=1)
         attention_vectors = self.softmax(attention_vectors)
-        attention_vectors = attention_vectors.unsqueeze(-1).unsqueeze(-1)
-        fea_v = (feas * attention_vectors).sum(dim=1)
+        attention_vectors = attention_vectors.unsqueeze(-1).unsqueeze(-1)  # [2, M, 256, 1, 1]
+        # + ##
+        # fea_v = (feas * attention_vectors).sum(dim=1)
+        #
+        # cat ##
+        fea_v = feas * attention_vectors
+        fea_v = fea_v.reshape(fea_v.shape[0], fea_v.shape[1] * fea_v.shape[2], fea_v.shape[3], fea_v.shape[4])
+        #
         return fea_v
-
 
 
 if __name__ == "__main__":
