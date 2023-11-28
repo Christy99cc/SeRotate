@@ -42,8 +42,5 @@
 #CUDA_VISIBLE_DEVICES=4 OMP_NUM_THREADS=0 ./tools/dist_train.sh configs/myexps/tridentnet_exp4.py 1
 #CUDA_VISIBLE_DEVICES=4 OMP_NUM_THREADS=0 python ./tools/test.py configs/myexps/tridentnet_exp4.py ./work_dirs/tridentnet_exp4/epoch_12.pth --format-only --eval-options submission_dir=work_dirs/Task1_results_tridentnet_exp4_1024
 
-# CUDA_VISIBLE_DEVICES=0,1,2,3 OMP_NUM_THREADS=0 ./tools/dist_train.sh configs/myexps/tridentnet_exp4.py 4
-# CUDA_VISIBLE_DEVICES=3 OMP_NUM_THREADS=0 python ./tools/test.py configs/myexps/tridentnet_exp4.py ./work_dirs/tridentnet_exp4/epoch_12.pth --format-only --eval-options submission_dir=work_dirs/Task1_results_tridentnet_exp4_1024
-
-sleep 3h
-CUDA_VISIBLE_DEVICES=5 OMP_NUM_THREADS=0 ./tools/dist_train.sh configs/myexps/tridentnet_exp5.py 1
+ CUDA_VISIBLE_DEVICES=1 OMP_NUM_THREADS=0 ./tools/dist_train.sh configs/rotated_faster_rcnn/rotated_faster_rcnn_r50_fpn_1x_dota_le90.py 1
+ CUDA_VISIBLE_DEVICES=1 OMP_NUM_THREADS=0 python ./tools/test.py configs/rotated_faster_rcnn/rotated_faster_rcnn_r50_fpn_1x_dota_le90.py ./work_dirs/rotated_faster_rcnn_r50_fpn_1x_dota_le90/epoch_12.pth --format-only --eval-options submission_dir=work_dirs/Task1_results_faster_1124
