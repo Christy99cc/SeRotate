@@ -19,7 +19,7 @@ class MyNeck14(nn.Module):
     dilation=1, 2, 3
 
     分支注意力
-    use SKNet的思想
+    use SKNet的思想 cat
 
 
     """
@@ -271,11 +271,11 @@ class AtrousSE(BaseModule):
         for i, fc in enumerate(self.fcs):
             vector = fc(fea_z).unsqueeze_(dim=1)
             if i == 0:
-                attention_vectors = vector
+                attention_vectors = vector  # [2,1,256]
             else:
                 attention_vectors = torch.cat([attention_vectors, vector],
-                                              dim=1)
-        attention_vectors = self.softmax(attention_vectors)
+                                              dim=1)   # [2, 3, 256]
+        attention_vectors = self.softmax(attention_vectors)  # [2, 3, 256]
         attention_vectors = attention_vectors.unsqueeze(-1).unsqueeze(-1)  # [2, M, 256, 1, 1]
         # + ##
         # fea_v = (feas * attention_vectors).sum(dim=1)

@@ -53,8 +53,11 @@ from .my_neck11 import MyNeck11
 from .my_neck12 import MyNeck12
 from .my_neck13 import MyNeck13
 from .my_neck14 import MyNeck14
+from .my_neck15 import MyNeck15
+from .my_neck17 import MyNeck17
+from .my_neck18 import MyNeck18
 
 __all__ = ['ReFPN', 'FPNSE02', 'FPNSE04', 'FPNSE05', 'FPNSE06', 'FPNSE07', 'FPNSE08', 'FPNSE09', 'FPNSE10', 'FPNSE11',
            'FPNSE12', 'FPNSE13', 'FPNSE22', 'MyNeck1', 'MyNeck2', 'MyFPNSE48S', 'MyFPNSE48S2', 'MyNeck3', 'MyNeck3_1',
            "MyNeck3WoRelu", "MyNeck4", "MyNeck5", "MyNeck6", "MyNeck7", "MyNeck8", "MyNeck9", "MyNeck11", "MyNeck12",
-           "MyNeck13", "MyNeck14"]
+           "MyNeck13", "MyNeck14", "MyNeck15", "MyNeck17", "MyNeck18"]
