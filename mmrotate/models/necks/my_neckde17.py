@@ -13,10 +13,15 @@ from ..builder import ROTATED_NECKS
 
 
 @ROTATED_NECKS.register_module()
-class SKNetNeck(nn.Module):
+class MyNeckDe17(nn.Module):
     """
+    用空洞卷积+可变形
+    dilation=1, 2, 3
+
     分支注意力
-    use SKNet的思想
+    use SKNet的思想 cat
+    前后都用cat
+
 
     """
 
@@ -34,7 +39,7 @@ class SKNetNeck(nn.Module):
                  norm_cfg=None,
                  act_cfg=None,
                  upsample_cfg=dict(mode='nearest')):
-        super(SKNetNeck, self).__init__()
+        super(MyNeckDe17, self).__init__()
         assert isinstance(in_channels, list)
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -94,14 +99,11 @@ class SKNetNeck(nn.Module):
                 inplace=False)
 
             # if i == 1:
-            # fpnse_conv = AtrousSE(out_channels, out_channels)
-            fpnse_conv = SKConv(out_channels, WH=1, M=2, G=1, r=2)
-
+            fpnse_conv = AtrousSE(out_channels, out_channels)
             self.fpnse_convs.append(fpnse_conv)
 
             conv1x1 = ConvModule(
-                # 3 * out_channels,
-                out_channels,
+                3  * out_channels,
                 out_channels,
                 1,
                 padding=0,
@@ -281,54 +283,28 @@ class AtrousSE(BaseModule):
         return fea_v
 
 
-class SKConv(nn.Module):
-    def __init__(self, features, WH, M, G, r, stride=1, L=32):
-        super(SKConv, self).__init__()
-        d = max(int(features / r), L)
-        self.M = M
-        self.features = features
-        self.convs = nn.ModuleList([])
-        for i in range(M):
-            # 使用不同kernel size的卷积
-            self.convs.append(
-                nn.Sequential(
-                    nn.Conv2d(features,
-                              features,
-                              kernel_size=3 + i * 2,
-                              stride=stride,
-                              padding=1 + i,
-                              groups=G), nn.BatchNorm2d(features),
-                    nn.ReLU(inplace=False)))
+if __name__ == "__main__":
+    net = AtrousSE(32, 32, 3, 1)
+    # w = net.w
+    # w1 = w[0:32]
+    # w2 = w[32:64]
+    # w3 = w[64:]
+    # print(w1[0,0,1,1], w2[0,0,0,0])
+    # print(w2[0,0,1,1], w3[0,0,0,0])
 
-        self.fc = nn.Linear(features, d)
-        self.fcs = nn.ModuleList([])
-        for i in range(M):
-            self.fcs.append(nn.Linear(d, features))
-        self.softmax = nn.Softmax(dim=1)
-
-    def forward(self, x):
-        for i, conv in enumerate(self.convs):
-            fea = conv(x).unsqueeze(dim=1)
-            if i == 0:
-                feas = fea
-            else:
-                feas = torch.cat([feas, fea], dim=1)
-        fea_U = torch.sum(feas, dim=1)
-        fea_s = fea_U.mean(-1).mean(-1)
-        fea_z = self.fc(fea_s)
-        for i, fc in enumerate(self.fcs):
-            # print(i, fea_z.shape)
-            vector = fc(fea_z).unsqueeze_(dim=1)
-            # print(i, vector.shape)
-            if i == 0:
-                attention_vectors = vector
-            else:
-                attention_vectors = torch.cat([attention_vectors, vector],
-                                              dim=1)
-        attention_vectors = self.softmax(attention_vectors)
-        attention_vectors = attention_vectors.unsqueeze(-1).unsqueeze(-1)
-        fea_v = (feas * attention_vectors).sum(dim=1)
-        return fea_v
-
-
-
+    inp = torch.randn([2, 32, 128, 128])
+    ref = torch.ones([2, 96, 124, 124])
+    opt = torch.optim.Adam(net.parameters(), lr=0.1)
+    for iter in range(100):
+        opt.zero_grad()
+        out, w = net(inp)
+        # print(out.shape)
+        loss = ((ref - out) ** 2).mean()
+        loss.backward()
+        opt.step()
+        print(loss.item())
+        w1 = w[0:32]
+        w2 = w[32:64]
+        w3 = w[64:]
+        print(w1[0, 0, 1, 1], w2[0, 0, 0, 0])
+        print(w2[0, 0, 1, 1], w3[0, 0, 0, 0])
