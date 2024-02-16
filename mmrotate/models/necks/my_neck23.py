@@ -13,13 +13,14 @@ from ..builder import ROTATED_NECKS
 
 
 @ROTATED_NECKS.register_module()
-class MyNeck15(nn.Module):
+class MyNeck23(nn.Module):
     """
     用空洞卷积
     dilation=1, 2, 3
 
     分支注意力
-    use SKNet的思想 +
+    use SKNet的思想 cat
+    前后都用cat
 
 
     """
@@ -38,7 +39,7 @@ class MyNeck15(nn.Module):
                  norm_cfg=None,
                  act_cfg=None,
                  upsample_cfg=dict(mode='nearest')):
-        super(MyNeck15, self).__init__()
+        super(MyNeck23, self).__init__()
         assert isinstance(in_channels, list)
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -164,7 +165,7 @@ class MyNeck15(nn.Module):
             #     continue
 
             out = self.fpnse_convs[i](laterals[i])
-            # out = self.conv1x1s[i](out)
+            out = self.conv1x1s[i](out)
             outs.append(out)
 
         for i in range(used_backbone_levels - 1, 0, -1):
@@ -222,9 +223,9 @@ class AtrousSE(BaseModule):
         self.reset_parameters()
 
         # attention
-        d = max(int(out_channels / r), L)
         self.M = len(self.dilations)
-        self.fc = nn.Linear(out_channels, d)
+        d = max(int(self.M * out_channels / r), L)
+        self.fc = nn.Linear(self.M * out_channels, d)
         self.fcs = nn.ModuleList([])
         for i in range(self.M):
             self.fcs.append(nn.Linear(d, out_channels))
@@ -258,31 +259,26 @@ class AtrousSE(BaseModule):
                      dilation) for stride, dilation, padding in zip(
                 self.strides, self.dilations, self.paddings)
         ]  # [2, 256, 256, 256]
-        for i, out in enumerate(outputs):
-            fea = out.unsqueeze_(dim=1)  # [2, 1, 256, 256, 256]
-            if i == 0:
-                feas = fea
-            else:
-                feas = torch.cat([feas, fea], dim=1) # # [2, 3, 256, 256, 256]
 
-        fea_U = torch.sum(feas, dim=1) # torch.Size([2, 256, 256, 256])
-        fea_s = fea_U.mean(-1).mean(-1) # [2, 256]
-        fea_z = self.fc(fea_s) # [2, 128]
+        feas = torch.stack(outputs).transpose(0, 1)  # [ 2, N, 256,...]
+        fea_U = feas.reshape(feas.shape[0], feas.shape[1] * feas.shape[2], feas.shape[3], feas.shape[4])  # [2, 3 * 256, ...]
+        fea_s = fea_U.mean(-1).mean(-1)  # [2, 3*256]
+        fea_z = self.fc(fea_s) # [2, 3*128]  # [2, 384]
         for i, fc in enumerate(self.fcs):
             vector = fc(fea_z).unsqueeze_(dim=1)
             if i == 0:
-                attention_vectors = vector
+                attention_vectors = vector  # [2,1,256]
             else:
                 attention_vectors = torch.cat([attention_vectors, vector],
-                                              dim=1)
-        attention_vectors = self.softmax(attention_vectors)
+                                              dim=1)   # [2, 3, 256]
+        attention_vectors = self.softmax(attention_vectors)  # [2, 3, 256]
         attention_vectors = attention_vectors.unsqueeze(-1).unsqueeze(-1)  # [2, M, 256, 1, 1]
         # + ##
-        fea_v = (feas * attention_vectors).sum(dim=1)
+        # fea_v = (feas * attention_vectors).sum(dim=1)
         #
         # cat ##
-        # fea_v = feas * attention_vectors
-        # fea_v = fea_v.reshape(fea_v.shape[0], fea_v.shape[1] * fea_v.shape[2], fea_v.shape[3], fea_v.shape[4])
+        fea_v = feas * attention_vectors
+        fea_v = fea_v.reshape(fea_v.shape[0], fea_v.shape[1] * fea_v.shape[2], fea_v.shape[3], fea_v.shape[4])
         #
         return fea_v
 

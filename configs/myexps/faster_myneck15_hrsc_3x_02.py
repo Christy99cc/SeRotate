@@ -167,7 +167,5 @@ evaluation = dict(interval=36, metric='mAP')
 
 find_unused_parameters=True
 
-#  mAP: 0.4274, AP50: 0.8320, AP55: 0.7560, AP60: 0.7290, AP65: 0.6260, AP70
-# : 0.5720, AP75: 0.3900, AP80: 0.2620, AP85: 0.0950, AP90: 0.0110, AP95: 0.0000
-
-# notes: 这个加了conv1x1s
+# mAP: 0.4237, AP50: 0.8290, AP55: 0.7590, AP60: 0.7400, AP65: 0.6320, AP70: 0.5820, AP75: 0.3940, AP80: 0.2180, AP85: 0.0740, AP90: 0.0100, AP95: 0.0000
+# +之后没有采用conv1x1s

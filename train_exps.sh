@@ -51,5 +51,9 @@
 #CUDA_VISIBLE_DEVICES=0 OMP_NUM_THREADS=0 python ./tools/test.py configs/myexps/faster_myneck19_relu_1x.py ./work_dirs/faster_myneck19_relu_1x/epoch_12.pth --format-only --eval-options submission_dir=work_dirs/Task1_results_faster_myneck19_relu_0203
 
 
-CUDA_VISIBLE_DEVICES=0 OMP_NUM_THREADS=0 ./tools/dist_train.sh configs/myexps/faster_myneck15_hrsc_3x.py 1
-CUDA_VISIBLE_DEVICES=0 OMP_NUM_THREADS=0 python ./tools/test.py configs/myexps/faster_myneck15_hrsc_3x.py ./work_dirs/faster_myneck15_hrsc_3x/epoch_12.pth --format-only --eval-options submission_dir=work_dirs/Task1_results_faster_myneck15_hrsc_3x_0216
+#CUDA_VISIBLE_DEVICES=0 OMP_NUM_THREADS=0 ./tools/dist_train.sh configs/myexps/faster_myneck15_hrsc_3x.py 1
+#CUDA_VISIBLE_DEVICES=0 OMP_NUM_THREADS=0 python ./tools/test.py configs/myexps/faster_myneck15_hrsc_3x.py ./work_dirs/faster_myneck15_hrsc_3x/epoch_12.pth --format-only --eval-options submission_dir=work_dirs/Task1_results_faster_myneck15_hrsc_3x_0216
+
+CUDA_VISIBLE_DEVICES=0 OMP_NUM_THREADS=0 ./tools/dist_train.sh configs/myexps/faster_myneck15_hrsc_3x_02.py 1
+#CUDA_VISIBLE_DEVICES=0 OMP_NUM_THREADS=0 python ./tools/test.py configs/myexps/faster_myneck15_hrsc_3x.py ./work_dirs/faster_myneck15_hrsc_3x/epoch_12.pth --format-only --eval-options submission_dir=work_dirs/Task1_results_faster_myneck15_hrsc_3x_0216
+
