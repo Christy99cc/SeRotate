@@ -22,7 +22,7 @@ class MyNeck22(nn.Module):
     use SKNet的思想 cat
     前后都用cat
 
-    添加到stage2后
+    MyNeck17的扩展版本
 
 
     """
@@ -31,6 +31,7 @@ class MyNeck22(nn.Module):
                  in_channels,
                  out_channels,
                  num_outs,
+                 add_levels=(0, 1, 2, 3),
                  start_level=0,
                  end_level=-1,
                  add_extra_convs=False,
@@ -61,6 +62,7 @@ class MyNeck22(nn.Module):
             self.backbone_end_level = end_level
             assert end_level <= len(in_channels)
             assert num_outs == end_level - start_level
+        self.add_levels = add_levels
         self.start_level = start_level
         self.end_level = end_level
         self.add_extra_convs = add_extra_convs
@@ -101,19 +103,20 @@ class MyNeck22(nn.Module):
                 inplace=False)
 
             # if i == 1:
-            fpnse_conv = AtrousSE(out_channels, out_channels)
-            self.fpnse_convs.append(fpnse_conv)
+            if i in self.add_levels:
+                fpnse_conv = AtrousSE(out_channels, out_channels)
+                self.fpnse_convs.append(fpnse_conv)
 
-            conv1x1 = ConvModule(
-                3  * out_channels,
-                out_channels,
-                1,
-                padding=0,
-                conv_cfg=conv_cfg,
-                norm_cfg=norm_cfg,
-                act_cfg=act_cfg,
-                inplace=False)
-            self.conv1x1s.append(conv1x1)
+                conv1x1 = ConvModule(
+                    3 * out_channels,
+                    out_channels,
+                    1,
+                    padding=0,
+                    conv_cfg=conv_cfg,
+                    norm_cfg=norm_cfg,
+                    act_cfg=act_cfg,
+                    inplace=False)
+                self.conv1x1s.append(conv1x1)
 
             self.lateral_convs.append(l_conv)
             self.fpn_convs.append(fpn_conv)
@@ -161,13 +164,17 @@ class MyNeck22(nn.Module):
 
         outs = []
         # print("used_backbone_levels", used_backbone_levels)
+        j = 0
         for i in range(used_backbone_levels):
             # if i > 0:
             #     outs.append(self.fpn_convs[i](laterals[i]))
             #     continue
-
-            out = self.fpnse_convs[i](laterals[i])
-            out = self.conv1x1s[i](out)
+            if i in self.add_levels:
+                out = self.fpnse_convs[j](laterals[i])
+                out = self.conv1x1s[j](out)
+                j = j + 1
+            else:
+                out = laterals[i]
             outs.append(out)
 
         for i in range(used_backbone_levels - 1, 0, -1):
@@ -176,7 +183,6 @@ class MyNeck22(nn.Module):
             #     laterals[i], size=prev_shape, **self.upsample_cfg)
             outs[i - 1] += F.interpolate(
                 outs[i], size=prev_shape, **self.upsample_cfg)
-
 
         # part 2: add extra levels
         if self.num_outs > len(outs):
@@ -206,7 +212,7 @@ class MyNeck22(nn.Module):
 
 class AtrousSE(BaseModule):
     def __init__(self, in_channels, out_channels, kernel_size=3, strides=(1, 1, 1), dilations=(1, 2, 3),
-                 M=2, L= 32, r=2, # attention params
+                 M=2, L=32, r=2,  # attention params
                  norm_cfg: Optional[Dict] = None,
                  act_cfg: Optional[Dict] = dict(type='ReLU')):
         super().__init__()
@@ -233,7 +239,6 @@ class AtrousSE(BaseModule):
             self.fcs.append(nn.Linear(d, out_channels))
         self.softmax = nn.Softmax(dim=1)
 
-
     @property
     def norm(self):
         if self.norm_name:
@@ -254,7 +259,6 @@ class AtrousSE(BaseModule):
                 bound = 1 / math.sqrt(fan_in)
                 init.uniform_(self.bias, -bound, bound)
 
-
     def forward(self, inputs):
         outputs = [
             F.conv2d(inputs, self.weight, self.bias, stride, padding,
@@ -263,16 +267,17 @@ class AtrousSE(BaseModule):
         ]  # [2, 256, 256, 256]
 
         feas = torch.stack(outputs).transpose(0, 1)  # [ 2, N, 256,...]
-        fea_U = feas.reshape(feas.shape[0], feas.shape[1] * feas.shape[2], feas.shape[3], feas.shape[4])  # [2, 3 * 256, ...]
+        fea_U = feas.reshape(feas.shape[0], feas.shape[1] * feas.shape[2], feas.shape[3],
+                             feas.shape[4])  # [2, 3 * 256, ...]
         fea_s = fea_U.mean(-1).mean(-1)  # [2, 3*256]
-        fea_z = self.fc(fea_s) # [2, 3*128]  # [2, 384]
+        fea_z = self.fc(fea_s)  # [2, 3*128]  # [2, 384]
         for i, fc in enumerate(self.fcs):
             vector = fc(fea_z).unsqueeze_(dim=1)
             if i == 0:
                 attention_vectors = vector  # [2,1,256]
             else:
                 attention_vectors = torch.cat([attention_vectors, vector],
-                                              dim=1)   # [2, 3, 256]
+                                              dim=1)  # [2, 3, 256]
         attention_vectors = self.softmax(attention_vectors)  # [2, 3, 256]
         attention_vectors = attention_vectors.unsqueeze(-1).unsqueeze(-1)  # [2, M, 256, 1, 1]
         # + ##
