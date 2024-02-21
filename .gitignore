@@ -1,4 +1,4 @@
-# Byte-compiled / optimized / DLL files
+，# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
@@ -131,3 +131,4 @@ toss.sh
 /MyTest/epoch_12.pth
 
 demo/MMRotate_Tutorial.ipynb
+/MyTest/

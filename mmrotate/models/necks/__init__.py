@@ -60,9 +60,10 @@ from .sknet_neck import SKNetNeck
 from .my_neckde17 import MyNeckDe17
 from .my_neck19_relu import MyNeck19ReLU
 from .my_neck22 import MyNeck22
+from .my_neck20 import MyNeck20
 
 __all__ = ['ReFPN', 'FPNSE02', 'FPNSE04', 'FPNSE05', 'FPNSE06', 'FPNSE07', 'FPNSE08', 'FPNSE09', 'FPNSE10', 'FPNSE11',
            'FPNSE12', 'FPNSE13', 'FPNSE22', 'MyNeck1', 'MyNeck2', 'MyFPNSE48S', 'MyFPNSE48S2', 'MyNeck3', 'MyNeck3_1',
            "MyNeck3WoRelu", "MyNeck4", "MyNeck5", "MyNeck6", "MyNeck7", "MyNeck8", "MyNeck9", "MyNeck11", "MyNeck12",
            "MyNeck13", "MyNeck14", "MyNeck15", "MyNeck17", "MyNeck18", "SKNetNeck", "MyNeckDe17", "MyNeck19ReLU",
-           "MyNeck22"]
+           "MyNeck22", "MyNeck20"]
